@@ -1,4 +1,4 @@
-27153593640173010
+27155367368810829
 .my_Audio
 MLT8530
 MLT-8530-2
@@ -48,6 +48,13 @@ Integrated Circuit
 0
 9
 9
+.my_Connector
+BAT_BH-18650-PC
+
+
+0
+2
+2
 .my_Connector
 CON-SMA-EDGE-S
 
