@@ -1,4 +1,4 @@
-27155367368810829
+27157162765221111
 .my_Audio
 MLT8530
 MLT-8530-2
@@ -188,6 +188,13 @@ RX7500
 0
 13
 13
+.my_RF
+nRF24L01+PA+LNA_Breakout
+nRF24L01+PA+LNA breakout board
+nRF24L01+PA+LNA adapter breakout
+0
+8
+8
 .my_Switch
 SK12D07VG4
 
