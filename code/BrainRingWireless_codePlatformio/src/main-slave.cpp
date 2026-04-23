@@ -25,9 +25,8 @@ mData myColor;
 #define PIN_BTN_LED 6 // Светодиод внутри кнопки (через резистор)
 
 // Системные переменные
-volatile bool buttonHit = false; // Флаг мгновенного нажатия
 unsigned long lastPingTime = 0;
-const int PING_INTERVAL = 300; // Как часто опрашиваем Админа (в миллисекундах)
+const int PING_INTERVAL = 100; // Как часто опрашиваем Админа (в миллисекундах)
 
 // --- НАСТРОЙКИ АСИНХРОННОЙ МЕЛОДИИ ---
 // 0 в массиве частот означает тишину (паузу)
@@ -36,7 +35,7 @@ const int winDur[] = {100, 50, 200, 50, 300};
 const int winTotalNotes = 5;
 
 int currentNote = 0;
-int noteTimer = 0;
+unsigned long noteTimer = 0;
 bool isPlaying = false;
 
 // Состояния стейт-машины
@@ -48,7 +47,17 @@ enum State
 };
 State currentState = STATE_IDLE;
 
-uint32_t timing;
+volatile bool buttonHit = false; // Флаг мгновенного нажатия
+volatile unsigned long lastBtnTime = 0;
+void isrButton()
+{
+  // Если статус IDLE и с прошлого нажатия прошло больше хх мс
+  if (currentState == STATE_IDLE && (millis() - lastBtnTime > 60))
+  {
+    buttonHit = true;
+    lastBtnTime = millis();
+  }
+}
 
 // Запуск мелодии с самого начала
 void startWinSequence()
@@ -57,54 +66,46 @@ void startWinSequence()
   isPlaying = true;
   noteTimer = millis();
 
-  // Запускаем первую ноту (если это не пауза)
   if (winFreq[0] > 0)
   {
-    tone(PIN_BUZZER, winFreq[0], winDur[0]);
+    noTone(PIN_BUZZER);           // Глушим старый звук для надежности
+    tone(PIN_BUZZER, winFreq[0]); // БЕЗ 3-ГО АРГУМЕНТА!
   }
 }
 
-// Принудительная остановка мелодии (Прерывание звука)
 void stopBuzzer()
 {
   isPlaying = false;
-  noTone(PIN_BUZZER); // Мгновенно глушим аппаратный таймер LGT8F328P
+  noTone(PIN_BUZZER);
 }
 
-// Эта функция должна постоянно крутиться в loop()
 void handleMelody()
 {
   if (!isPlaying)
     return;
 
-  // Проверяем, вышло ли время текущей ноты или паузы
   if (millis() - noteTimer >= winDur[currentNote])
   {
-    currentNote++; // Шагаем на следующий элемент массива
+    currentNote++;
 
     if (currentNote < winTotalNotes)
     {
-      noteTimer = millis(); // Сбрасываем секундомер для новой ноты
-
+      noteTimer = millis();
       if (winFreq[currentNote] > 0)
       {
-        tone(PIN_BUZZER, winFreq[currentNote], winDur[currentNote]);
+        noTone(PIN_BUZZER);                     // Сброс глюка ядра LGT8F
+        tone(PIN_BUZZER, winFreq[currentNote]); // БЕЗ 3-ГО АРГУМЕНТА!
+      }
+      else
+      {
+        noTone(PIN_BUZZER); // Отрабатываем паузу (0 в массиве)
       }
     }
     else
     {
-      // Массив закончился, останавливаем воспроизведение
       isPlaying = false;
+      noTone(PIN_BUZZER); // Глушим окончательно
     }
-  }
-}
-
-// Обработчик прерывания (срабатывает только если мы в режиме IDLE)
-void isrButton()
-{
-  if (currentState == STATE_IDLE)
-  {
-    buttonHit = true;
   }
 }
 
@@ -152,24 +153,29 @@ void sendToAdmin(byte dataToSend)
 {
   if (radio.write(&dataToSend, sizeof(dataToSend)))
   {
-    if (radio.isAckPayloadAvailable())
-    {
-      byte globalState;
-      radio.read(&globalState, sizeof(globalState));
+    Serial.println("send");
+    // Serial.print(txData[0]);
+  }
+  else
+    Serial.println("fail");
 
-      // Анализируем ответ Админа (0 = Идет игра, 1-5 = Номер победителя)
-      if (globalState == 0)
-      {
-        changeState(STATE_IDLE);
-      }
-      else if (globalState == PLAYER_ID)
-      {
-        changeState(STATE_WON);
-      }
-      else
-      {
-        changeState(STATE_BLOCKED);
-      }
+  if (radio.isAckPayloadAvailable())
+  {
+    byte globalState;
+    radio.read(&globalState, sizeof(globalState));
+
+    // Анализируем ответ Админа (0 = Идет игра, 1-5 = Номер победителя)
+    if (globalState == 0)
+    {
+      changeState(STATE_IDLE);
+    }
+    else if (globalState == PLAYER_ID)
+    {
+      changeState(STATE_WON);
+    }
+    else
+    {
+      changeState(STATE_BLOCKED);
     }
   }
 }
@@ -181,9 +187,9 @@ void setup()
   // ===== NRF24L01 =====
   radio.begin();
   radio.setChannel(0x60);
-  radio.setDataRate(RF24_2MBPS);
+  radio.setDataRate(RF24_1MBPS);
   radio.setPALevel(RF24_PA_MAX);
-  radio.setRetries(4, 9);
+  radio.setRetries(5, 10);
   radio.enableAckPayload();
   radio.openWritingPipe(address[0]);
   radio.powerUp();
@@ -208,25 +214,19 @@ void setup()
 
 void loop()
 {
-  if (millis() - timing > 1000)
-  {
-    Serial.println("Seconds");
-    timing = millis();
-  }
-
   if (buttonHit) // 1. ПРИОРИТЕТ: Игрок ударил по кнопке
   {
-    Serial.println("Игрок нажал кнопку!");
+    Serial.println("Press");
     buttonHit = false;
     sendToAdmin(PLAYER_ID); // Отправляем Админу свой боевой ID (я нажал!)
   }
 
-  /*if (millis() - lastPingTime > PING_INTERVAL) // 2. ФОНОВЫЙ ОПРОС: Синхронизация статуса (Пинг)
+  if (millis() - lastPingTime > PING_INTERVAL) // 2. ФОНОВЫЙ ОПРОС: Синхронизация статуса (Пинг)
   {
     lastPingTime = millis();
     if (!buttonHit) // Если по кнопке сейчас не бьют, отправляем Админу код 0 (просто спросить статус)
       sendToAdmin(0);
-  }*/
+  }
 
   // Асинхронный обработчик звука
   handleMelody();

@@ -28,35 +28,21 @@ uint8_t globalGameState = 0; // 0 = Ждем, 1-5 = Победитель
 uint8_t incomingData = 0;
 
 // --- АСИНХРОННАЯ МЕЛОДИЯ ПОВЕЩЕНИЯ ---
-const int winFreq[] = {700, 0, 700};
-const int winDur[] = {80, 100, 80};
-const int winTotalNotes = 3;
+const int winFreq[] = {800, 0, 1200, 0, 1500};
+const int winDur[] = {100, 50, 200, 50, 300};
+const int winTotalNotes = 5;
 
 int currentNote = 0;
 unsigned long noteTimer = 0;
 bool isPlaying = false;
-
-volatile unsigned long lastRstTime = 0;
-void isrReset()
-{
-    if (millis() - lastRstTime > 60)
-    {
-        resetHit = true;
-        lastRstTime = millis();
-    }
-}
 
 void startWinSequence()
 {
     currentNote = 0;
     isPlaying = true;
     noteTimer = millis();
-
     if (winFreq[0] > 0)
-    {
-        noTone(PIN_BUZZER);           // Глушим старый звук для надежности
-        tone(PIN_BUZZER, winFreq[0]); // БЕЗ 3-ГО АРГУМЕНТА!
-    }
+        tone(PIN_BUZZER, winFreq[0], winDur[0]);
 }
 
 void stopBuzzer()
@@ -69,30 +55,26 @@ void handleMelody()
 {
     if (!isPlaying)
         return;
-
     if (millis() - noteTimer >= winDur[currentNote])
     {
         currentNote++;
-
         if (currentNote < winTotalNotes)
         {
             noteTimer = millis();
             if (winFreq[currentNote] > 0)
-            {
-                noTone(PIN_BUZZER);                     // Сброс глюка ядра LGT8F
-                tone(PIN_BUZZER, winFreq[currentNote]); // БЕЗ 3-ГО АРГУМЕНТА!
-            }
-            else
-            {
-                noTone(PIN_BUZZER); // Отрабатываем паузу (0 в массиве)
-            }
+                tone(PIN_BUZZER, winFreq[currentNote], winDur[currentNote]);
         }
         else
         {
             isPlaying = false;
-            noTone(PIN_BUZZER); // Глушим окончательно
         }
     }
+}
+
+// Прерывание кнопки СБРОС
+void isrReset()
+{
+    resetHit = true;
 }
 
 void setup()
@@ -112,7 +94,7 @@ void setup()
     // Радио
     radio.begin();
     radio.setChannel(0x60);
-    radio.setDataRate(RF24_1MBPS);
+    radio.setDataRate(RF24_2MBPS);
     radio.setPALevel(RF24_PA_MAX);
     radio.enableAckPayload();
     radio.openReadingPipe(0, address[0]);
@@ -136,7 +118,6 @@ void loop()
         delay(1);
 
         // Обновляем ответ в радиомодуле
-        radio.flush_tx();
         radio.writeAckPayload(0, &globalGameState, sizeof(globalGameState));
         Serial.println("System RESET");
     }
