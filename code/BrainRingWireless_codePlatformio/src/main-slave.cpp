@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
-#define PLAYER_ID 5 // Уникальный ID игрока (1 - 5)
+#define PLAYER_ID 1 // Уникальный ID игрока (1 - 5)
+// 1-Красный, 2-Зеленый, 3-Синий, 4-Желтый, 5-Белый
 
 #include <SPI.h>
 #include <RF24.h>
@@ -10,12 +11,11 @@ RF24 radio(CE_PIN, CSN_PIN);
 byte address[][6] = {"Admin", "Node1"}; // Адреса труб
 
 #define PIN_LED_STRIP 4 // Лента WS2812B
-#define NUM_LEDS 12     // Кол-во диодов в ленте
+#define NUM_LEDS 20     // Кол-во диодов в ленте
 #define COLOR_DEPTH 3
 #include <microLED.h> // подключаем библу
 microLED<NUM_LEDS, PIN_LED_STRIP, MLED_NO_CLOCK, LED_WS2818, ORDER_GRB, CLI_AVER> strip;
 // Массив базовых цветов microLED (тип данных mData)
-// 1-Красный, 2-Зеленый, 3-Синий, 4-Желтый, 5-Белый
 mData playerColors[5] = {mRed, mGreen, mBlue, mYellow, mWhite};
 mData myColor;
 
