@@ -47,9 +47,11 @@ SLIM_BOSSES = {"H3": (2.3, 12.0, 2.0), "H4": (2.3, 12.0, 2.3)}
 
 # right side: hook latches. A rigid cap tongue rises into the case wall, its tooth points outwards (+X).
 # The cap is hooked in first at ~12 deg and swung shut about the outer seam of the right wall.
-LATCHES = ((30.0, 8.0), (-16.5, 5.5), (-35.5, 6.0))      # (Y, width) between the finger grooves
-T_X0, T_X1, T_Z1 = 34.7, 36.2, 4.0                       # tongue: 0.7 mm off the PCB edge, top height
-TOOTH, TOOTH_H = 0.7, 1.0
+LATCHES = ((30.0, 8.0), (3.2, 4.4), (-16.5, 5.5), (-35.5, 6.0))   # (Y, width) between the finger grooves
+T_X0, T_X1, T_Z1 = 34.6, 35.8, 6.0                       # tongue: 0.6 mm off the PCB edge, top height
+TOOTH, TOOTH_H = 1.0, 1.4
+T_BEVEL = (0.45, 3.5)                                    # inner top bevel of the tongue: X, Z
+POCKET_CLR = 0.15                                        # -> outer skin over the pocket A_R - T_X1 - TOOTH - POCKET_CLR
 
 # antenna SMA (nRF24L01+PA+LNA), axis along +Y
 SMA_X, SMA_Z = 0.0, 19.95
@@ -82,11 +84,12 @@ BUZZER = (22.0, -3.5)
 # finger grooves: +X side, and -X side below the button (the button is the index-finger spot there)
 GRIP_YS_R, GRIP_YS_L, GRIP_R, GRIP_DEPTH = (-26.0, -7.0, 12.0), (-28.0, -10.0), 11.0, 2.0
 
-# front artwork (variant K5): multi-colour inlay, flush with the front, printed face down in the first layers
+# front artwork (variant A4 + frame): multi-colour inlay, flush with the front, printed face down in the first layers.
+# AMS-friendly: no thin details, every colour in large areas, letters of the top plate are cut out (= white case)
 ART_DEPTH = 0.6                         # 3 layers x 0.2
 FONT_DIR = "C:/Windows/Fonts/"
 TITLE_FONT, SUB_FONT = "impact.ttf", "ariblk.ttf"
-FRAME_INSET, FRAME_W = 1.5, 1.2         # frame inside the flat part of the front (the R_TOP rounding is left white)
+FRAME_INSET, FRAME_W = 1.5, 2.0         # frame inside the flat part of the front (the R_TOP rounding is left white)
 
 CLR = 0.15
 UP = (Align.CENTER, Align.CENTER, Align.MIN)
@@ -135,7 +138,8 @@ for name, (r0, z_step, r1) in SLIM_BOSSES.items():
 LATCH_PIVOT = (A_R, Z_SPLIT)
 for y, w in LATCHES:
     case -= Pos((CAV_X - 1 + T_X1 + 0.2) / 2, y, (Z_SPLIT - 1 + T_Z1 + 0.3) / 2) * Box(T_X1 + 0.2 - CAV_X + 1, w + 0.4, T_Z1 + 0.3 - Z_SPLIT + 1)
-    pocket = Pos(T_X1 + (TOOTH + 0.2) / 2 - 0.1, y, T_Z1 + 0.2 - (TOOTH_H + 0.4) / 2) * Box(TOOTH + 0.4, w + 0.4, TOOTH_H + 0.4)
+    px0, px1 = T_X1 - 0.2, T_X1 + TOOTH + POCKET_CLR
+    pocket = Pos((px0 + px1) / 2, y, T_Z1 + 0.2 - (TOOTH_H + 0.4) / 2) * Box(px1 - px0, w + 0.4, TOOTH_H + 0.4)
     for a in range(0, 20, 2):
         case -= Pos(LATCH_PIVOT[0], 0, LATCH_PIVOT[1]) * Rot(0, -a, 0) * Pos(-LATCH_PIVOT[0], 0, -LATCH_PIVOT[1]) * pocket
 
@@ -198,24 +202,17 @@ for y in GRIP_YS_L:
 flat = offset(front, -R_TOP)
 frame = offset(flat, -FRAME_INSET) - offset(flat, -FRAME_INSET - FRAME_W)
 
-star = Polygon(*[((13.0 if i % 2 == 0 else 8.5) * math.cos(2 * math.pi * i / 32 + 0.1),
-                  (13.0 if i % 2 == 0 else 8.5) * math.sin(2 * math.pi * i / 32 + 0.1)) for i in range(32)])
-star_edge = offset(star, 0.9, kind=Kind.INTERSECTION)
-core = Circle(4.6)
+STAR_N, STAR_RO, STAR_RI, STAR_EDGE, STAR_CORE = 24, 15.0, 10.5, 1.6, 5.0
+star = Polygon(*[((STAR_RO if i % 2 == 0 else STAR_RI) * math.cos(2 * math.pi * i / STAR_N + 0.1),
+                  (STAR_RO if i % 2 == 0 else STAR_RI) * math.sin(2 * math.pi * i / STAR_N + 0.1)) for i in range(STAR_N)])
+core = Circle(STAR_CORE)
+title = Pos(0, 26.5) * RectangleRounded(56.0, 13.0, 3.0)        # blue plate, "BRAIN RING" cut out
+badge = Pos(0, -29.0) * RectangleRounded(40.0, 9.0, 3.0)        # black plate, yellow "ADMIN"
+badge_txt = art(text_at("ADMIN", 6.0, SUB_FONT, 0, -29.0))
 
-blue = art(frame)
-black = art(star_edge) - art(star) + art(core)
-yellow = art(star) - art(core)
-for txt, y in (("BRAIN", 25.0), ("RING", -23.0)):   # blue title with a black drop shadow
-    t = art(text_at(txt, 11, TITLE_FONT, 0, y))
-    blue += t
-    black += art(text_at(txt, 11, TITLE_FONT, 0.9, y - 0.9)) - t
-black += art(text_at("ADMIN", 4.2, SUB_FONT, 0, -33.0))
-for x in (-15, -9, -3, 3, 9, 15):                    # dots at the antenna end
-    if abs(x) == 3:
-        yellow += art(Pos(x, 34.5) * Circle(1.1))
-    else:
-        blue += art(Pos(x, 34.5) * Circle(1.1))
+blue = art(title) - art(text_at("BRAIN RING", 10.0, TITLE_FONT, 0, 26.5))
+yellow = art(star) - art(core) + badge_txt
+black = art(frame) + art(offset(star, STAR_EDGE, kind=Kind.ARC)) - art(star) + art(core) + art(badge) - badge_txt
 art_parts = {"blue": blue - led_win, "yellow": yellow - led_win, "black": black - led_win}
 for part in art_parts.values():
     case -= part
@@ -254,7 +251,10 @@ cap += Pos(sw_cx, (tab_y0 + tab_y1) / 2, (Z_SPLIT - 0.5 + SW_Z0 - CLR) / 2) * Bo
 cap = cap & outer
 
 for y, w in LATCHES:  # tongues are added after the trim: they live inside the case wall
-    tongue = Pos((T_X0 + T_X1) / 2, y, (Z_SPLIT - 0.5 + T_Z1) / 2) * Box(T_X1 - T_X0, w, T_Z1 - Z_SPLIT + 0.5)
+    # profile in XZ; the inner top corner is bevelled -> more swing before the tongue meets the battery holder (x 33.4)
+    prof = Polygon((T_X0, Z_SPLIT - 0.5), (T_X1, Z_SPLIT - 0.5), (T_X1, T_Z1), (T_X0 + T_BEVEL[0], T_Z1),
+                   (T_X0, T_Z1 - T_BEVEL[1]), align=None)
+    tongue = Pos(0, y, 0) * extrude(Plane.XZ * prof, amount=w / 2, both=True)
     tooth = Pos(T_X1 + TOOTH / 2, y, T_Z1 - TOOTH_H / 2) * Box(TOOTH, w, TOOTH_H)
     tooth -= Pos(T_X1 + TOOTH, y, T_Z1) * (Rot(0, 45, 0) * Box(0.8, w + 1, 0.8))       # lead-in chamfer
     cap += tongue + tooth
