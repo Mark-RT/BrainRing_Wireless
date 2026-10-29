@@ -17,6 +17,7 @@
 #define PIN_LED_STRIP 4 // Лента WS2812B
 #define PIN_BTN_LED 6   // Светодиод внутри кнопки (через резистор)
 #define PIN_NOISE A6    // Свободный аналоговый пин для randomSeed
+#define PIN_KEEPALIVE A3 // Нагрузка Q2+R10: не даёт IP5305 отключиться при малом токе
 
 #define NUM_LEDS 20 // Кол-во диодов в ленте
 
@@ -416,6 +417,31 @@ void renderStrip()
   setButtonLed(btn);
 }
 
+// --- ПОДДЕРЖАНИЕ ПИТАНИЯ IP5305 ---
+// IP5305 выключает выход 5V, если ток долго меньше ~45 мА.
+// Раз в 15 с включаем нагрузку ~100 мА на 300 мс (в среднем ~2 мА).
+const unsigned long KEEPALIVE_PERIOD = 15000;
+const unsigned long KEEPALIVE_PULSE = 300;
+
+unsigned long keepAliveTimer = 0;
+bool keepAliveOn = false;
+
+void handleKeepAlive()
+{
+  if (!keepAliveOn && millis() - keepAliveTimer >= KEEPALIVE_PERIOD)
+  {
+    digitalWrite(PIN_KEEPALIVE, HIGH);
+    keepAliveOn = true;
+    keepAliveTimer = millis();
+  }
+  else if (keepAliveOn && millis() - keepAliveTimer >= KEEPALIVE_PULSE)
+  {
+    digitalWrite(PIN_KEEPALIVE, LOW);
+    keepAliveOn = false;
+    keepAliveTimer = millis();
+  }
+}
+
 void setup()
 {
   Serial.begin(57600);
@@ -424,6 +450,10 @@ void setup()
   pinMode(PIN_BTN_LED, OUTPUT);
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   buzzer.begin();
+
+  // Нагрузка для IP5305 (выключена до первого импульса)
+  pinMode(PIN_KEEPALIVE, OUTPUT);
+  digitalWrite(PIN_KEEPALIVE, LOW);
 
   // ===== WS2812 =====
   strip.setBrightness(100);
@@ -470,4 +500,5 @@ void loop()
 
   renderStrip();   // 3. Анимации
   buzzer.update(); // 4. Асинхронный звук
+  handleKeepAlive(); // 5. Не даём IP5305 уснуть
 }
