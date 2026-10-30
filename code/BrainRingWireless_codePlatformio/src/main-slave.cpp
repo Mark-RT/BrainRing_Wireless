@@ -19,7 +19,7 @@
 #define PIN_NOISE A6    // Свободный аналоговый пин для randomSeed
 #define PIN_KEEPALIVE A3 // Нагрузка Q2+R10: не даёт IP5305 отключиться при малом токе
 
-#define NUM_LEDS 20 // Кол-во диодов в ленте
+#define NUM_LEDS 52 // Кол-во диодов в ленте
 
 // --- EEPROM ---
 #define EE_MAGIC_ADDR 0
@@ -202,6 +202,8 @@ void applyAdminState(const AdminState &s)
   if (currentState != target || newRound)
   {
     enterState(target, newRound); // мелодия - один раз за раунд
+    if (!newRound)
+      stateSince = millis() - 2000; // связь вернулась в том же раунде: без повтора вспышек, сразу ровное свечение
     resultRound = s.round;
   }
 }
@@ -270,7 +272,7 @@ void startGame()
   myColor = playerColor(playerId);
 
   radioSetupCommon(radio);
-  radio.setRetries(playerId + 1, 3); // у каждого игрока своя задержка повтора: (id+2)*250 мкс
+  radio.setRetries(playerId + 1, 15); // у каждого игрока своя задержка повтора: (id+2)*250 мкс
   radio.openWritingPipe(RADIO_ADDRESS);
   radio.powerUp();
   radio.stopListening();

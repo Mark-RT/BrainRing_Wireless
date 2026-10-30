@@ -52,7 +52,7 @@ inline void radioSetupCommon(RF24 &radio)
     radio.begin();
     radio.setChannel(RADIO_CHANNEL);
     radio.setDataRate(RF24_1MBPS);
-    radio.setPALevel(RF24_PA_MAX);
+    radio.setPALevel(RF24_PA_LOW); // на PA_MAX рядом стоящие платы почти не слышат друг друга (<1% пакетов)
     radio.enableAckPayload();
 }
 

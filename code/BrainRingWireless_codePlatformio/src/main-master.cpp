@@ -16,6 +16,7 @@
 const uint16_t DECISION_WINDOW_MS = 30; // окно сравнения почти одновременных нажатий
 const uint32_t RESET_CHECK_MS = 60000;  // дольше этого после сброса проверка "нажал до сброса" не нужна
 const uint16_t LED_FRAME_MS = 20;
+const uint16_t RESET_RELEASE_MS = 50;   // кнопка Сброс должна быть отпущена столько, чтобы сработать снова
 
 RF24 radio(CE_PIN, CSN_PIN);
 microLED<NUM_LEDS, PIN_LED_STRIP, MLED_NO_CLOCK, LED_WS2812, ORDER_GRB, CLI_AVER> strip;
@@ -26,18 +27,19 @@ AdminState gameState = {0, 0};
 // --- КНОПКА СБРОСА ---
 volatile bool resetHit = false;
 volatile uint32_t resetIsrUs = 0;
-volatile unsigned long lastRstTime = 0;
+volatile bool resetArmed = true; // взводится только после стабильного отпускания кнопки
+uint32_t resetDownMs = 0;        // когда кнопку последний раз видели нажатой
 
 uint32_t resetUs = 0; // момент последнего сброса (micros)
 uint32_t resetMs = 0; // он же в millis (для защиты от переполнения micros)
 
 void isrReset()
 {
-    if (millis() - lastRstTime > 60)
+    if (resetArmed)
     {
+        resetArmed = false;
         resetIsrUs = micros();
         resetHit = true;
-        lastRstTime = millis();
     }
 }
 
@@ -83,6 +85,12 @@ bool pressedAfterReset(uint32_t pressAgeUs, uint32_t nowUs)
 
 void handleReset()
 {
+    // Дребезг при отпускании не должен давать второй сброс: он стёр бы нажатие игрока
+    if (digitalRead(PIN_BUTTON) == LOW)
+        resetDownMs = millis();
+    else if (!resetArmed && millis() - resetDownMs > RESET_RELEASE_MS)
+        resetArmed = true;
+
     if (!resetHit)
         return;
 
