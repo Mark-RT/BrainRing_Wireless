@@ -33,9 +33,17 @@ const uint16_t FAST_PING_INTERVAL = 15;  // частый опрос сразу �
 const uint16_t FAST_PING_DURATION = 300; // сколько длится частый опрос
 const uint16_t PRESS_GIVEUP_MS = 1500;   // столько пытаемся доставить нажатие
 const uint16_t LINK_TIMEOUT_MS = 1000;   // нет ответа дольше -> "нет связи"
-const uint16_t HOLD_MS = 2000;           // длинное удержание кнопки
 const uint32_t RELEASE_STABLE_US = 20000; // кнопка должна быть отпущена столько перед нажатием
 const uint16_t FRAME_MS = 20;            // 50 кадров/с
+const uint16_t WIN_ANIM_MS = 3500;       // длительность анимации победителя
+const uint8_t BTN_LED_MIN = 26;          // 10% ШИМ: нижняя граница яркости кнопки, она и так тусклая
+const uint16_t BRIGHTNESS_PREVIEW_MS = 1000; // столько лента горит ровно после смены яркости
+// Значения setBrightness (идёт через гамму microLED): реальный ШИМ 33, 23 и 17 = 100%, 70% и 50%
+const uint8_t STRIP_BRIGHTNESS[BRIGHTNESS_LEVELS] = {100, 82, 68};
+const uint16_t SIMON_PING_INTERVAL = 25; // опрос Админа в Саймоне: подсветка следует за его командами
+const uint16_t SIMON_PRESS_FLASH_MS = 150; // вспышка и нота на своём пульте при нажатии
+const uint16_t SIMON_NOTE_MAX_MS = 1500;   // нота показа не тянется дольше, даже если связь пропала
+const uint8_t SIMON_RULER_LEN = 45;        // LED на линейку очков (дальше - жизни)
 
 RF24 radio(CE_PIN, CSN_PIN);
 microLED<NUM_LEDS, PIN_LED_STRIP, MLED_NO_CLOCK, LED_WS2818, ORDER_GRB, CLI_AVER> strip;
@@ -53,7 +61,8 @@ enum State
   STATE_NO_LINK,     // нет связи с Админом
   STATE_IDLE,        // ждём нажатия
   STATE_WON,
-  STATE_LOST
+  STATE_LOST,
+  STATE_SIMON        // Саймон: подфазу задаёт Админ в SimonState
 };
 State currentState = STATE_SETUP_EMPTY;
 uint32_t stateSince = 0;
@@ -89,48 +98,15 @@ void isrButton()
 }
 
 // --- КНОПКА В МЕНЮ (опрос) ---
-enum ButtonEvent
-{
-  BTN_NONE,
-  BTN_CLICK,
-  BTN_LONG
-};
+PolledButton menuButton(PIN_BUTTON);
 
-bool btnDown = false;
-bool btnLongFired = false;
-uint32_t btnDownSince = 0;
-uint32_t btnLastChange = 0;
-
-void buttonSync()
-{
-  btnDown = digitalRead(PIN_BUTTON) == LOW;
-  btnLongFired = btnDown; // уже зажатая кнопка не даст ложного клика при отпускании
-  btnDownSince = millis();
-  btnLastChange = millis();
-}
-
-ButtonEvent pollButton()
-{
-  bool down = digitalRead(PIN_BUTTON) == LOW;
-  if (down != btnDown && millis() - btnLastChange > 20)
-  {
-    btnDown = down;
-    btnLastChange = millis();
-    if (down)
-    {
-      btnDownSince = millis();
-      btnLongFired = false;
-    }
-    else if (!btnLongFired)
-      return BTN_CLICK;
-  }
-  if (btnDown && !btnLongFired && millis() - btnDownSince >= HOLD_MS)
-  {
-    btnLongFired = true;
-    return BTN_LONG;
-  }
-  return BTN_NONE;
-}
+// --- САЙМОН ---
+SimonState simon = {0xFF, 0, 0, 0, 0, 0, 0}; // последнее состояние от Админа
+uint32_t simonPhaseSince = 0;
+uint32_t simonStepSince = 0;
+uint32_t pressFlashUntil = 0;
+bool noteOn = false;
+uint32_t noteUntil = 0;
 
 // --- EEPROM ---
 uint8_t loadPlayerId()
@@ -189,9 +165,26 @@ void changeState(State newState)
     enterState(newState, false);
 }
 
+// Уровень яркости приходит от Админа в каждом ответе
+bool brightnessKnown = false;
+uint8_t brightnessLevel = 0;
+uint32_t brightnessPreviewUntil = 0;
+
+void applyBrightness(uint8_t level)
+{
+  if (level >= BRIGHTNESS_LEVELS || (brightnessKnown && level == brightnessLevel))
+    return;
+  if (brightnessKnown) // при включении просто применяем, показываем только смену
+    brightnessPreviewUntil = millis() + BRIGHTNESS_PREVIEW_MS;
+  brightnessKnown = true;
+  brightnessLevel = level;
+  strip.setBrightness(STRIP_BRIGHTNESS[level]);
+}
+
 // Анализируем ответ Админа
 void applyAdminState(const AdminState &s)
 {
+  applyBrightness(s.brightness);
   if (s.winner == 0)
   {
     changeState(STATE_IDLE);
@@ -203,10 +196,63 @@ void applyAdminState(const AdminState &s)
   {
     enterState(target, newRound); // мелодия - один раз за раунд
     if (!newRound)
-      stateSince = millis() - 2000; // связь вернулась в том же раунде: без повтора вспышек, сразу ровное свечение
+      stateSince = millis() - WIN_ANIM_MS; // связь вернулась в том же раунде: без повтора вспышек, сразу ровное свечение
     resultRound = s.round;
   }
 }
+
+// --- САЙМОН: звук своего цвета ---
+void simonNote(uint16_t durationMs)
+{
+  buzzer.hold(SIMON_TONES[playerId - 1]);
+  noteOn = true;
+  noteUntil = millis() + durationMs;
+}
+
+void simonNoteOff()
+{
+  if (!noteOn)
+    return;
+  noteOn = false;
+  buzzer.stop();
+}
+
+void simonUpdateNote()
+{
+  if (noteOn && (int32_t)(millis() - noteUntil) >= 0)
+    simonNoteOff();
+}
+
+// Анализируем ответ Админа в режиме Саймон
+void applySimonState(const SimonState &s)
+{
+  applyBrightness(s.brightness);
+  bool newPhase = s.phase != simon.phase;
+  bool newStep = s.stepId != simon.stepId;
+  simon = s;
+
+  if (currentState != STATE_SIMON)
+    enterState(STATE_SIMON, false);
+  if (newPhase)
+    simonPhaseSince = millis();
+  if (newStep)
+    simonStepSince = millis();
+
+  if (s.phase == SIMON_SHOW)
+  {
+    if (s.active != playerId)
+      simonNoteOff();
+    else if (newStep && !(s.flags & SIMON_FLAG_SILENT))
+      simonNote(SIMON_NOTE_MAX_MS);
+  }
+  else if (s.phase != SIMON_INPUT)
+    simonNoteOff();
+
+  if (s.phase == SIMON_ERROR && newStep && s.active == playerId)
+    buzzer.start(MELODY(LOSE_MELODY));
+}
+
+void renderStrip();
 
 // --- РАДИО ---
 // Отправка пакета Админу и обработка ответа (ACK payload)
@@ -219,9 +265,21 @@ bool sendPacket(uint8_t type, uint32_t pressAgeUs)
   lastAckTime = millis();
   while (radio.available())
   {
-    AdminState s;
-    radio.read(&s, sizeof(s));
-    applyAdminState(s);
+    uint8_t len = radio.getDynamicPayloadSize();
+    if (len == sizeof(SimonState))
+    {
+      SimonState s;
+      radio.read(&s, sizeof(s));
+      applySimonState(s);
+    }
+    else if (len == sizeof(AdminState))
+    {
+      AdminState s;
+      radio.read(&s, sizeof(s));
+      applyAdminState(s);
+    }
+    else
+      radio.flush_rx();
   }
   return true;
 }
@@ -232,6 +290,20 @@ void handlePress()
 {
   if (!pressPending)
     return;
+
+  if (currentState == STATE_SIMON)
+  {
+    if (simon.phase != SIMON_INPUT) // нажатия вне ввода не считаются
+    {
+      pressPending = false;
+      return;
+    }
+    // Отклик сразу на своём пульте, не дожидаясь Админа
+    pressFlashUntil = millis() + SIMON_PRESS_FLASH_MS;
+    simonNote(SIMON_PRESS_FLASH_MS);
+    lastFrame = 0;
+    renderStrip();
+  }
 
   uint32_t start = millis();
   bool delivered = false;
@@ -257,7 +329,9 @@ void handlePress()
 
 void handlePing()
 {
-  uint16_t interval = (int32_t)(fastPingUntil - millis()) > 0 ? FAST_PING_INTERVAL : PING_INTERVAL;
+  uint16_t interval = (int32_t)(fastPingUntil - millis()) > 0 ? FAST_PING_INTERVAL
+                      : currentState == STATE_SIMON           ? SIMON_PING_INTERVAL
+                                                              : PING_INTERVAL;
   if (millis() - lastPingTime < interval)
     return;
   lastPingTime = millis();
@@ -287,7 +361,7 @@ void startGame()
 // --- МЕНЮ ВЫБОРА ЦВЕТА ---
 void handleSetup()
 {
-  ButtonEvent ev = pollButton();
+  ButtonEvent ev = menuButton.poll();
 
   if (currentState == STATE_SETUP_EMPTY)
   {
@@ -318,10 +392,129 @@ void handleSetup()
   }
 }
 
-// Яркость светодиода кнопки 0..255 с гамма-коррекцией (глазу ШИМ кажется нелинейным)
+// Яркость светодиода кнопки 0..255 с гамма-коррекцией (глазу ШИМ кажется нелинейным).
+// Уровень 0 = BTN_LED_MIN: кнопка не гаснет совсем
 void setButtonLed(uint8_t level)
 {
-  analogWrite(PIN_BTN_LED, (uint16_t)level * level / 255);
+  uint16_t gamma = (uint16_t)level * level / 255;
+  analogWrite(PIN_BTN_LED, BTN_LED_MIN + gamma * (255 - BTN_LED_MIN) / 255);
+}
+
+// Линейка очков: 1 очко = 1 LED, каждый 5-й белый; после полного круга старый круг остаётся тусклым
+void drawScoreRuler(uint8_t score)
+{
+  uint8_t laps = score / SIMON_RULER_LEN;
+  uint8_t rest = score % SIMON_RULER_LEN;
+  for (uint8_t i = 0; i < SIMON_RULER_LEN; i++)
+  {
+    if (i < rest)
+      strip.set(i, (i % 5 == 4) ? mData(mWhite) : scaleColor(myColor, 90));
+    else if (laps)
+      strip.set(i, scaleColor(myColor, 15));
+  }
+}
+
+// Жизни: красные точки в конце ленты
+void drawLives(uint8_t lives)
+{
+  for (uint8_t i = 0; i < lives; i++)
+    strip.set(NUM_LEDS - 1 - i * 2, mRed);
+}
+
+// Анимации Саймона, возвращает яркость кнопки
+uint8_t renderSimon()
+{
+  uint32_t t = millis() - simonPhaseSince;
+  uint8_t btn = 0;
+  strip.clear();
+
+  switch (simon.phase)
+  {
+  case SIMON_LOBBY: // змейка своим цветом: "ты в игре, ждём старта"
+  {
+    uint8_t head = (t / 40) % NUM_LEDS;
+    for (uint8_t i = 0; i < 8; i++)
+      strip.set((head + NUM_LEDS - i) % NUM_LEDS, scaleColor(myColor, 255 - i * 30));
+    btn = triangleWave(t, 2500);
+    break;
+  }
+
+  case SIMON_READY: // вспышка на каждый счёт отсчёта
+    if (millis() - simonStepSince < 250)
+    {
+      strip.fill(myColor);
+      btn = 255;
+    }
+    break;
+
+  case SIMON_INTRO: // особый раунд объявляем стробом, затем счёт и жизни
+    if ((simon.flags & (SIMON_FLAG_BURST | SIMON_FLAG_SILENT)) && t < 400)
+    {
+      if ((t / 60) % 2)
+        strip.fill(mWhite);
+      btn = ((t / 60) % 2) ? 255 : 0;
+    }
+    else
+    {
+      drawScoreRuler(simon.score);
+      drawLives(simon.lives);
+    }
+    break;
+
+  case SIMON_SHOW: // горит только активный, остальные почти тёмные
+    if (simon.active == playerId)
+    {
+      strip.fill(myColor);
+      btn = 255;
+    }
+    else
+      strip.fill(scaleColor(myColor, 6));
+    break;
+
+  case SIMON_INPUT:
+    if ((int32_t)(pressFlashUntil - millis()) > 0) // только что нажал
+    {
+      strip.fill(myColor);
+      btn = 255;
+    }
+    else if (!(simon.flags & SIMON_FLAG_HURRY) || (t / 125) % 2) // времени мало -> мигаем
+    {
+      uint8_t filled = (uint16_t)simon.progress * NUM_LEDS / 255;
+      strip.fill(scaleColor(myColor, 8));
+      for (uint8_t i = 0; i < filled; i++)
+        strip.set(i, scaleColor(myColor, 90));
+      btn = 80;
+    }
+    break;
+
+  case SIMON_OK: // бегущий огонь своим цветом
+  {
+    strip.fill(scaleColor(myColor, 40));
+    uint8_t pos = (t / 12) % NUM_LEDS;
+    for (uint8_t i = 0; i < 6; i++)
+      strip.set((pos + i) % NUM_LEDS, myColor);
+    btn = 200;
+    break;
+  }
+
+  case SIMON_ERROR: // виновник стробит красным, остальные тёмные
+    if (simon.active == playerId && (t / 80) % 2 == 0)
+    {
+      strip.fill(mRed);
+      btn = 255;
+    }
+    break;
+
+  case SIMON_PAUSE: // ждём участника, который пропал со связи
+    strip.fill(scaleColor(mOrange, 10 + (uint16_t)triangleWave(t, 1500) * 100 / 255));
+    break;
+
+  case SIMON_OVER: // счёт набирается по одному LED
+    drawScoreRuler(simonRevealed(t, simon.score));
+    btn = triangleWave(t, 2000) / 2;
+    break;
+  }
+  return btn;
 }
 
 // --- АНИМАЦИИ ЛЕНТЫ + КНОПКИ ---
@@ -379,7 +572,7 @@ void renderStrip()
   }
 
   case STATE_WON:
-    if (t < 1500) // вспышки + белый бегущий огонь, кнопка стробит в такт вспышкам
+    if (t < WIN_ANIM_MS) // вспышки + белый бегущий огонь, кнопка стробит в такт вспышкам
     {
       bool flash = (t / 100) % 2;
       strip.fill(flash ? myColor : scaleColor(myColor, 60));
@@ -414,7 +607,13 @@ void renderStrip()
       btn = 26 + (uint16_t)triangleWave(t - 2000, 2000) * (128 - 26) / 255;
     break;
   }
+
+  case STATE_SIMON:
+    btn = renderSimon();
+    break;
   }
+  if ((int32_t)(brightnessPreviewUntil - millis()) > 0) // лента ровно горит: видно новую яркость
+    strip.fill(myColor);
   strip.show();
   setButtonLed(btn);
 }
@@ -458,7 +657,7 @@ void setup()
   digitalWrite(PIN_KEEPALIVE, LOW);
 
   // ===== WS2812 =====
-  strip.setBrightness(100);
+  strip.setBrightness(STRIP_BRIGHTNESS[0]);
   strip.clear();
   strip.show();
   delay(1); // между вызовами show должна быть пауза минимум 40 мкс !!!!
@@ -477,7 +676,7 @@ void setup()
     forceMenu = millis() - t >= HOLD_MS;
   }
 
-  buttonSync();
+  menuButton.sync();
   if (forceMenu)
   {
     menuId = playerId ? playerId : 1;
@@ -502,5 +701,6 @@ void loop()
 
   renderStrip();   // 3. Анимации
   buzzer.update(); // 4. Асинхронный звук
+  simonUpdateNote();
   handleKeepAlive(); // 5. Не даём IP5305 уснуть
 }

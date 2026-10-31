@@ -43,6 +43,16 @@ const Note SOUND_CLICK[] PROGMEM = {{1200, 15}};
 const Note SOUND_CONFIRM[] PROGMEM = {{N_C5, 70}, {N_E5, 70}, {N_G5, 70}, {N_C6, 150}};
 const Note ADMIN_PRESS_SOUND[] PROGMEM = {{1500, 80}, {0, 60}, {1500, 80}, {0, 60}, {2000, 150}};
 const Note ADMIN_RESET_SOUND[] PROGMEM = {{2000, 25}};
+const Note SOUND_LEVEL[] PROGMEM = {{1500, 80}, {0, 80}, {1500, 80}, {0, 80}, {1500, 80}}; // до 3 сигналов: уровень яркости
+
+// --- САЙМОН ---
+// Нота каждого цвета (ID 1..5): пентатоника, любая цепочка звучит созвучно
+const uint16_t SIMON_TONES[5] = {N_C5, N_D5, N_E5, N_G5, N_A5};
+const Note SIMON_BEEP[] PROGMEM = {{1500, 120}};
+const Note SIMON_REPLAY[] PROGMEM = {{N_G5, 60}, {0, 30}, {N_G5, 60}};
+const Note SIMON_DENY[] PROGMEM = {{200, 250}};
+const Note SIMON_ROUND_OK[] PROGMEM = {{N_E5, 70}, {N_G5, 70}, {N_C6, 120}};
+const Note SIMON_TWIST[] PROGMEM = {{N_C6, 50}, {N_E6, 50}, {N_C6, 50}, {N_E6, 50}, {N_C6, 50}, {N_E6, 50}};
 
 #define MELODY(arr) arr, (uint8_t)(sizeof(arr) / sizeof(Note))
 
@@ -69,6 +79,14 @@ public:
     {
         _playing = false;
         noTone(_pin);
+    }
+
+    // Нота без длительности: звучит до stop()
+    void hold(uint16_t freq)
+    {
+        _playing = false;
+        noTone(_pin); // Сброс глюка ядра LGT8F
+        tone(_pin, freq);
     }
 
     bool isPlaying() const { return _playing; }
