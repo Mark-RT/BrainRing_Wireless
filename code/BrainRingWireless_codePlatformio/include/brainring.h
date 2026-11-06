@@ -25,8 +25,8 @@ inline mData playerColor(uint8_t id)
 }
 
 // --- ЯРКОСТЬ ЛЕНТЫ ---
-// Уровень хранит и раздаёт Админ: 0 = 100%, 1 = 70%, 2 = 50%
-#define BRIGHTNESS_LEVELS 3
+// Уровень хранит и раздаёт Админ: 0 = 100%, 1 = 90% ... 8 = 20% (шаг 10%)
+#define BRIGHTNESS_LEVELS 9
 
 // --- ПРОТОКОЛ ---
 enum PacketType : uint8_t
@@ -70,6 +70,7 @@ enum SimonPhase : uint8_t
 #define SIMON_FLAG_SILENT 0x02 // тихий раунд: показ без нот
 #define SIMON_FLAG_BURST 0x04  // спурт: показ быстрее обычного
 #define SIMON_FLAG_WIN 0x08    // пройдены все шаги
+#define SIMON_FLAG_HOLD 0x10   // Админ придержал игру перед раундом
 
 // Админ -> Игрок (ACK payload в режиме Саймон)
 struct __attribute__((packed)) SimonState
@@ -82,8 +83,13 @@ struct __attribute__((packed)) SimonState
     uint8_t progress; // INPUT: 0..255 доля введённых шагов, READY: номер отсчёта
     uint8_t flags;    // SIMON_FLAG_*
     uint8_t brightness; // уровень яркости ленты 0..BRIGHTNESS_LEVELS-1
+    uint8_t roster;   // участники игры: бит (1 << id); 0 = игра не начата
 };
 
+const uint16_t SIMON_OK_ANIM_MS = 1000;    // бегущие огни после пройденного раунда
+const uint16_t SIMON_ERROR_ANIM_MS = 1500; // красный строб виновника
+const uint16_t SIMON_BREAK_MS = 1000;      // тишина после них, перед показом счёта
+const uint16_t SIMON_HURRY_MS = 2000;      // последние 2 с на нажатие: нарастающая красная лента
 const uint16_t SIMON_REVEAL_DELAY_MS = 1200; // пауза перед подсчётом очков в конце игры
 const uint16_t SIMON_REVEAL_STEP_MS = 120;   // одно очко при подсчёте
 
@@ -156,7 +162,7 @@ inline void radioSetupCommon(RF24 &radio)
     radio.begin();
     radio.setChannel(RADIO_CHANNEL);
     radio.setDataRate(RF24_1MBPS);
-    radio.setPALevel(RF24_PA_LOW); // на PA_MAX рядом стоящие платы почти не слышат друг друга (<1% пакетов)
+    radio.setPALevel(RF24_PA_HIGH); // PA_HIGH = средняя мощность (в RF24 нет PA_MED); на PA_MAX рядом стоящие платы почти не слышат друг друга (<1% пакетов)
     radio.enableAckPayload();
 }
 

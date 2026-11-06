@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>BrainRing Wireless — инструкция</title>
+<style>
+  @page { size: A4; margin: 14mm 15mm 16mm 15mm; }
+  :root {
+    --ink: #1d2330;
+    --muted: #5b6475;
+    --line: #dfe3ea;
+    --soft: #f4f6f9;
+    --accent: #5b3fd0;
+    --accent-soft: #eee9ff;
+    --red: #e23b3b; --green: #2fa84f; --blue: #2f6fe0; --yellow: #f2b705; --white: #ffffff;
+    --amber: #ef8a17;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    margin: 0; color: var(--ink); background: #fff;
+    font: 10.2pt/1.45 "Segoe UI", Arial, sans-serif;
+  }
+  h1, h2, h3 { line-height: 1.2; margin: 0; }
+  h2 {
+    font-size: 17pt; margin: 0 0 3mm; padding-bottom: 2mm;
+    border-bottom: 2px solid var(--accent); color: var(--ink);
+    break-after: avoid;
+  }
+  h2 .num { color: var(--accent); margin-right: 2mm; }
+  h3 { font-size: 11.5pt; margin: 4mm 0 1.5mm; break-after: avoid; }
+  p { margin: 0 0 2mm; }
+  ul, ol { margin: 0 0 2mm; padding-left: 5mm; }
+  li { margin: 0.6mm 0; }
+  b { font-weight: 650; }
+  .page { break-before: page; }
+  section { margin-bottom: 6mm; }
+  .muted { color: var(--muted); }
+  .small { font-size: 8.8pt; }
+
+  /* Cover */
+  .cover {
+    height: 262mm; display: flex; flex-direction: column; justify-content: space-between;
+    border-radius: 6mm; padding: 16mm 14mm 12mm;
+    background: linear-gradient(150deg, #241a5c 0%, #3b2a9a 55%, #5b3fd0 100%); color: #fff;
+  }
+  .cover .kicker { letter-spacing: 0.25em; text-transform: uppercase; font-size: 9pt; opacity: 0.75; }
+  .cover h1 { font-size: 40pt; font-weight: 750; margin-top: 4mm; }
+  .cover .sub { font-size: 14pt; opacity: 0.9; margin-top: 3mm; max-width: 140mm; }
+  .cover .dots { display: flex; gap: 5mm; margin: 14mm 0 8mm; }
+  .cover .dot { width: 20mm; height: 20mm; border-radius: 50%; box-shadow: 0 0 0 2.5mm rgba(255,255,255,0.12), 0 0 9mm rgba(255,255,255,0.25); }
+  .cover .toc { background: rgba(255,255,255,0.09); border-radius: 4mm; padding: 6mm 8mm; columns: 2; column-gap: 10mm; }
+  .cover .toc div { break-inside: avoid; padding: 1.2mm 0; font-size: 10.5pt; }
+  .cover .toc span { opacity: 0.6; margin-right: 2mm; }
+  .cover .foot { font-size: 8.5pt; opacity: 0.6; }
+
+  /* Blocks */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .card { border: 1px solid var(--line); border-radius: 3mm; padding: 4mm 4.5mm; background: #fff; break-inside: avoid; }
+  .card h3 { margin-top: 0; }
+  .callout { border-radius: 3mm; padding: 3.5mm 4.5mm; margin: 3mm 0; break-inside: avoid; }
+  .callout.tip { background: var(--accent-soft); border-left: 1.2mm solid var(--accent); }
+  .callout.warn { background: #fff4e5; border-left: 1.2mm solid var(--amber); }
+  .callout b:first-child { display: block; margin-bottom: 0.8mm; }
+
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps li { counter-increment: s; position: relative; padding-left: 9mm; margin: 2mm 0; break-inside: avoid; }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 0.2mm;
+    width: 6mm; height: 6mm; border-radius: 50%; background: var(--accent); color: #fff;
+    font-weight: 700; font-size: 9pt; display: flex; align-items: center; justify-content: center;
+  }
+
+  table.compact th, table.compact td { padding: 1.1mm 2.4mm; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; font-size: 9.4pt; break-inside: auto; }
+  th { text-align: left; font-weight: 650; background: var(--soft); color: var(--ink); }
+  th, td { padding: 1.8mm 2.4mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr { break-inside: avoid; }
+  td:first-child { font-weight: 600; }
+  table.plain td:first-child { font-weight: 400; }
+
+  .chip { display: inline-block; width: 3.4mm; height: 3.4mm; border-radius: 50%; vertical-align: -0.5mm; margin-right: 1.2mm; border: 1px solid rgba(0,0,0,0.25); }
+  .key {
+    display: inline-block; padding: 0.2mm 2mm; border-radius: 1.5mm; border: 1px solid #c8cdd8;
+    background: var(--soft); font-weight: 650; font-size: 9pt; white-space: nowrap;
+  }
+  .players { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3mm; margin: 3mm 0; }
+  .players div { text-align: center; border: 1px solid var(--line); border-radius: 3mm; padding: 3mm 1mm; font-size: 9pt; }
+  .players .big { width: 10mm; height: 10mm; border-radius: 50%; margin: 0 auto 1.5mm; border: 1px solid rgba(0,0,0,0.2); }
+
+  .flow { display: flex; align-items: stretch; gap: 1.5mm; margin: 3mm 0 4mm; }
+  .flow div { flex: 1; border-radius: 2.5mm; padding: 2.5mm 2mm; text-align: center; font-size: 8.6pt; background: var(--soft); border: 1px solid var(--line); }
+  .flow div b { display: block; font-size: 9.4pt; margin-bottom: 0.6mm; }
+  .flow .arr { flex: 0 0 auto; background: none; border: none; padding: 0; align-self: center; color: var(--muted); font-size: 12pt; }
+  .flow .hl { background: var(--accent-soft); border-color: #cfc4ff; }
+
+  figure { margin: 3mm 0; break-inside: avoid; }
+  figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 1mm; }
+</style>
+</head>
+<body>
+
+<!-- ============ ОБЛОЖКА ============ -->
+<div class="cover">
+  <div>
+    <div class="kicker">Инструкция пользователя</div>
+    <h1>BrainRing Wireless</h1>
+    <div class="sub">Беспроводная система для брейн-ринга на 5 игроков. Пульт ведущего и пульты игроков, плюс встроенная командная игра «Саймон».</div>
+    <div class="dots">
+      <div class="dot" style="background:var(--red)"></div>
+      <div class="dot" style="background:var(--green)"></div>
+      <div class="dot" style="background:var(--blue)"></div>
+      <div class="dot" style="background:var(--yellow)"></div>
+      <div class="dot" style="background:var(--white)"></div>
+    </div>
+  </div>
+  <div>
+    <div class="toc">
+      <div><span>1</span>Комплект и устройство пультов</div>
+      <div><span>2</span>Подготовка: цвет каждого пульта</div>
+      <div><span>3</span>Брейн-ринг</div>
+      <div><span>4</span>Яркость лент</div>
+      <div><span>5</span>Игра «Саймон»</div>
+      <div><span>6</span>Что означает подсветка</div>
+      <div><span>7</span>Если что-то не так</div>
+      <div><span>✦</span>Шпаргалка на одной странице</div>
+    </div>
+    <p class="foot" style="margin-top:6mm">Описание соответствует текущей прошивке пультов (master / slave).</p>
+  </div>
+</div>
+
+<!-- ============ 1. КОМПЛЕКТ ============ -->
+<section class="page">
+  <h2><span class="num">1</span>Комплект и устройство пультов</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Пульт ведущего</h3>
+      <ul>
+        <li><b>Кнопка</b>: в брейн-ринге это «Сброс», в «Саймоне» — управление игрой.</li>
+        <li><b>Цветной индикатор</b> по центру: показывает состояние игры.</li>
+        <li><b>Звук</b>: сигналы сброса, победы, подсказки.</li>
+        <li><b>Выключатель</b> и разъём <b>USB-C</b> для зарядки.</li>
+        <li><b>Индикаторы заряда</b> на нижней крышке.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Пульт игрока (до 5 штук)</h3>
+      <ul>
+        <li><b>Большая кнопка</b> со своей подсветкой. Цвет кнопке даёт её пластик.</li>
+        <li><b>Светодиодная лента</b>: главный «экран» игрока.</li>
+        <li><b>Звук</b>: мелодии победы и проигрыша, ноты в «Саймоне».</li>
+        <li><b>Выключатель</b> и разъём <b>USB-C</b> для зарядки.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Пять цветов = пять игроков <span class="muted small" style="font-weight:400">— у каждого пульта свой номер и цвет, в игре все цвета разные</span></h3>
+  <div class="players">
+    <div><div class="big" style="background:var(--red)"></div><b>1</b> Красный</div>
+    <div><div class="big" style="background:var(--green)"></div><b>2</b> Зелёный</div>
+    <div><div class="big" style="background:var(--blue)"></div><b>3</b> Синий</div>
+    <div><div class="big" style="background:var(--yellow)"></div><b>4</b> Жёлтый</div>
+    <div><div class="big" style="background:var(--white)"></div><b>5</b> Белый</div>
+  </div>
+
+  <div class="callout tip">
+    <b>Главное правило</b>
+    Пульт ведущего — центр системы: пульты игроков только показывают то, что он сообщает. Режим игры и яркость лент задаются с него.
+  </div>
+
+  <h3>Включение</h3>
+  <ol class="steps">
+    <li>Включите пульты игроков выключателем. Пока ведущий не на связи, по ленте бегает <b>тусклая красная точка</b>.</li>
+    <li>Включите пульт ведущего, <b>не трогая кнопку</b>. Через мгновение красные точки исчезнут: игроки на связи, можно играть в брейн-ринг.</li>
+    <li>Чтобы вместо брейн-ринга запустить «Саймона», включайте пульт ведущего с <b>зажатой кнопкой</b> (см. раздел 5).</li>
+  </ol>
+  <p class="muted small">Режим выбирается заново при каждом включении: без кнопки — брейн-ринг.</p>
+</section>
+
+<!-- ============ 2. ПОДГОТОВКА ============ -->
+<section>
+  <h2><span class="num">2</span>Подготовка: цвет каждого пульта</h2>
+  <p>Цвет задаётся один раз и запоминается в пульте игрока. Новый пульт с пустой памятью при включении <b>мигает белым</b>: он ждёт выбора цвета.</p>
+  <ol class="steps">
+    <li><b>Войти в выбор цвета.</b> Пустой пульт: удерживайте его кнопку <span class="key">2 с</span>. Уже настроенный пульт: включите его с зажатой кнопкой и держите <span class="key">2 с</span>.</li>
+    <li><b>Выбрать цвет.</b> Лента горит цветом-кандидатом, кнопка часто мигает. Каждый <span class="key">клик</span> — следующий цвет по кругу: красный → зелёный → синий → жёлтый → белый.</li>
+    <li><b>Сохранить.</b> Удерживайте кнопку <span class="key">2 с</span>. Лента трижды мигнёт выбранным цветом, прозвучит подтверждение, и пульт начнёт искать ведущего.</li>
+  </ol>
+  <p class="small"><b>Не давайте двум пультам один цвет:</b> ведущий различает игроков только по цвету, и два красных пульта для него — один игрок.</p>
+</section>
+
+<!-- ============ 3. БРЕЙН-РИНГ ============ -->
+<section class="page">
+  <h2><span class="num">3</span>Брейн-ринг</h2>
+  <p>Обычный режим, включается всегда, если при включении пульта ведущего кнопка не зажата. Задача игроков — нажать свою кнопку раньше всех.</p>
+
+  <div class="flow">
+    <div><b>Ожидание</b>ленты «дышат» своим цветом</div>
+    <div class="arr">→</div>
+    <div class="hl"><b>Нажатие</b>кто первый — тот отвечает</div>
+    <div class="arr">→</div>
+    <div><b>Результат</b>победитель сияет, остальные гаснут</div>
+    <div class="arr">→</div>
+    <div><b>Сброс</b>клик ведущего, новый вопрос</div>
+  </div>
+
+  <h3>Ход раунда</h3>
+  <ol class="steps">
+    <li>Ведущий задаёт вопрос и нажимает <span class="key">Сброс</span> (короткий клик). Индикатор ведущего мигает белым, ленты игроков плавно «дышат» своими цветами.</li>
+    <li>Первый нажавший игрок побеждает в раунде. Его лента <b>3,5 секунды</b> вспыхивает с белыми бегущими огнями, затем горит ровно; звучит одна из трёх победных мелодий.</li>
+    <li>У остальных лента гаснет от краёв к центру и остаётся тусклой, звучит мелодия проигрыша.</li>
+    <li>Индикатор ведущего трижды мигает <b>цветом победителя</b> и продолжает им гореть, звучит сигнал.</li>
+    <li>Следующий вопрос — снова <span class="key">Сброс</span>.</li>
+  </ol>
+
+  <div class="grid2">
+    <div class="callout tip">
+      <b>Честное определение первого</b>
+      Каждый пульт запоминает точный момент нажатия. Ведущий сравнивает нажатия, пришедшие почти одновременно, и выбирает того, кто нажал раньше, а не того, чей сигнал пришёл первым.
+    </div>
+    <div class="callout warn">
+      <b>Фальстарт не засчитывается</b>
+      Если игрок нажал кнопку до «Сброса», это нажатие пропадает. Чтобы ответить, нужно отпустить кнопку и нажать снова.
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. ЯРКОСТЬ ============ -->
+<section>
+  <h2><span class="num">4</span>Яркость лент</h2>
+  <p>Яркость лент меняется сразу на всех пультах и <b>сохраняется автоматически</b> в пульте ведущего: подтверждать не нужно, после выключения она остаётся.</p>
+  <table class="compact">
+    <tr><th style="width:38%">Действие</th><th>Что происходит</th></tr>
+    <tr><td>Удерживать кнопку ведущего <span class="key">2 с</span></td><td>Яркость на 10% ниже. Держите дальше — каждую секунду ещё −10%: 100% → 90% → … → 20% → снова 100%. Отпустите на нужной ступени.</td></tr>
+    <tr><td>Как понять уровень</td><td>Сигнал ведущего на каждой ступени: чем ярче, тем выше (самый высокий — 100%). Ленты при этом горят ровным светом.</td></tr>
+  </table>
+  <div class="callout warn">
+    <b>Меняйте яркость между вопросами</b>
+    Нажатие кнопки сразу срабатывает как «Сброс», поэтому текущий раунд обнулится. В «Саймоне» яркость меняется так же, но только в лобби, до старта игры. Подсветка кнопок игроков от этой настройки не зависит.
+  </div>
+</section>
+
+<!-- ============ 5. САЙМОН ============ -->
+<section class="page">
+  <h2><span class="num">5</span>Игра «Саймон»</h2>
+  <p>Командная игра на память. Пульты показывают цепочку цветов, а команда повторяет её по порядку: каждый игрок отвечает за свой цвет и нажимает кнопку, когда подходит его очередь. С каждым раундом цепочка длиннее, а темп быстрее. У команды общий счёт и <b>3 жизни</b>.</p>
+
+  <h3>Как включить</h3>
+  <ol class="steps">
+    <li>Включите пульты игроков, которые будут играть.</li>
+    <li>Зажмите кнопку на пульте ведущего и, не отпуская, включите его.</li>
+    <li>Держите кнопку <span class="key">3 с</span>: слышны тики, индикатор разгорается фиолетовым. В конце звучит мелодия — режим «Саймон» включён, кнопку можно отпустить.</li>
+  </ol>
+  <p class="muted small">Отпустили раньше — включится обычный брейн-ринг. Чтобы вернуться из «Саймона» в брейн-ринг, выключите и включите пульт ведущего без кнопки.</p>
+
+  <h3>Состав команды</h3>
+  <ul>
+    <li>В лобби индикатор ведущего мигает фиолетовым <b>столько раз, сколько пультов на связи</b>, затем пауза. Ленты игроков показывают бегущую «змейку» своим цветом.</li>
+    <li>Играть могут <b>от 1 до 5</b> игроков. Цвета в цепочке берутся только из тех, кто в команде.</li>
+    <li><b>Команда фиксируется в момент старта</b> и остаётся такой до конца игры. Пульт, включённый уже после старта, в игре не участвует: он тускло светит белым, а его нажатия не учитываются. Он войдёт в следующую игру.</li>
+  </ul>
+
+  <h3>Раунд по шагам</h3>
+  <div class="flow">
+    <div><b>Счёт · 2 с</b>очки и жизни на лентах</div>
+    <div class="arr">→</div>
+    <div><b>3-2-1 · 3 с</b>вспышки и сигналы</div>
+    <div class="arr">→</div>
+    <div><b>Показ</b>цвета загораются по одному</div>
+    <div class="arr">→</div>
+    <div class="hl"><b>Повтор</b>команда нажимает по порядку</div>
+    <div class="arr">→</div>
+    <div><b>Итог</b>раунд пройден или ошибка</div>
+  </div>
+  <ol class="steps">
+    <li><b>Старт.</b> Ведущий кликает кнопку в лобби.</li>
+    <li><b>Счёт.</b> 2 секунды на лентах видны очки команды и оставшиеся жизни (как их читать — в части «Очки» ниже).</li>
+    <li><b>Отсчёт 3-2-1.</b> Три вспышки лент раз в секунду, ведущий пищит; последний сигнал выше и длиннее. Сразу за ним — первый цвет. Отсчёт идёт перед <b>каждым</b> раундом, чтобы никто не пропустил начало.</li>
+    <li><b>Показ.</b> Пульты загораются по очереди, каждый своим цветом и со своей нотой. Остальные ленты в это время тёмные. Индикатор ведущего повторяет текущий цвет.</li>
+    <li><b>Повтор.</b> Игроки нажимают свои кнопки в том же порядке. Нажатие сразу подсвечивает пульт и звучит его нота. Лента заполняется по мере ввода — это прогресс всей команды.</li>
+    <li><b>Время.</b> На каждое нажатие отведено ограниченное время (таблица ниже), на первое — на секунду больше. За 2 секунды до конца все ленты начинают наливаться красным, от 20% до 60% яркости: нарастающая угроза.</li>
+    <li><b>Раунд пройден</b> — 1 секунду по лентам бегут огни и звучит короткая мелодия, затем секунда тишины. Команда получает очки, цепочка сохраняется и в следующем раунде становится длиннее. Всего между раундами около 7 секунд.</li>
+  </ol>
+</section>
+
+<section class="page">
+  <h3 style="margin-top:0">Ошибка</h3>
+  <p>Ошибкой считается нажатие не в свою очередь или пропуск своей очереди (время вышло). Виновник всегда известен:</p>
+  <ul>
+    <li>лента виновника 1,5 секунды <b>стробит красным</b> и играет грустная мелодия, у остальных ленты гаснут, затем секунда тишины;</li>
+    <li>индикатор ведущего горит красным, команда теряет 1 жизнь;</li>
+    <li>если жизни ещё есть, снова идут счёт и отсчёт 3-2-1, та же цепочка <b>показывается заново</b>, и раунд начинается сначала.</li>
+  </ul>
+  <p>Нажатия во время показа не считаются ошибкой — они просто игнорируются.</p>
+
+  <h3>Управление с пульта ведущего</h3>
+  <table>
+    <tr><th style="width:26%">Когда</th><th style="width:22%">Действие</th><th>Результат</th></tr>
+    <tr><td>Лобби</td><td><span class="key">клик</span></td><td>Старт игры с теми, кто на связи. Если пультов на связи нет — низкий сигнал «отказ».</td></tr>
+    <tr><td>Лобби</td><td><span class="key">удержание 2 с</span></td><td>Яркость лент −10%; держите дальше — ещё −10% каждую секунду.</td></tr>
+    <tr><td>Счёт или отсчёт перед раундом</td><td><span class="key">клик</span></td><td><b>Придержать игру</b>, например пока команда радуется или кто-то отошёл. Ленты показывают счёт, индикатор ведущего медленно пульсирует. Следующий <span class="key">клик</span> — отсчёт 3-2-1 заново.</td></tr>
+    <tr><td>Повтор (ввод)</td><td><span class="key">клик</span></td><td><b>Показать цепочку ещё раз.</b> Ввод начинается сначала, бонус за чистый раунд сгорает. 3 раза за игру; дальше — сигнал «отказ», игра продолжается.</td></tr>
+    <tr><td>Идёт игра</td><td><span class="key">удержание 2 с</span></td><td>Закончить игру и показать счёт.</td></tr>
+    <tr><td>Конец игры</td><td><span class="key">клик</span></td><td>Вернуться в лобби, новая игра.</td></tr>
+  </table>
+  <p class="muted small">Во время ввода индикатор ведущего показывает оставшиеся жизни: зелёный — 3, жёлтый — 2, красный — 1. Следующий цвет цепочки он не подсказывает.</p>
+
+  <h3>Пауза, конец игры, победа</h3>
+  <ul>
+    <li><b>Пауза.</b> Если пульт участника пропал со связи (сел, выключили), игра встаёт: ленты пульсируют янтарным, индикатор ведущего тоже. Жизнь не снимается. Когда пульт снова на связи, текущая цепочка показывается заново. Не ждать — <span class="key">удержание 2 с</span> завершит игру.</li>
+    <li><b>Конец игры</b> — когда закончились жизни. Звучит мелодия, затем счёт набирается на лентах по одному светодиоду, а ведущий тикает на каждое очко: результат можно посчитать на слух. Индикатор ведущего горит красным.</li>
+    <li><b>Полная победа</b> — пройти цепочку из 64 цветов. Звучат фанфары, индикатор ведущего переливается радугой.</li>
+  </ul>
+</section>
+
+<section class="page">
+  <h3 style="margin-top:0">Очки и как их читать</h3>
+  <div class="grid2">
+    <div>
+      <table class="plain">
+        <tr><th>За что</th><th style="width:20%">Очки</th></tr>
+        <tr><td>Раунд пройден</td><td>+1</td></tr>
+        <tr><td>Раунд без ошибок и без повторного показа</td><td>+1</td></tr>
+        <tr><td>Особый раунд («спурт» или «тихий»)</td><td>+1</td></tr>
+      </table>
+      <p class="small">Пример: чистый обычный раунд даёт 2 очка, чистый особый — 3.</p>
+    </div>
+    <div>
+      <p><b>Линейка на ленте.</b> 1 светодиод = 1 очко, каждый пятый — белый, считать удобно пятёрками. В конце ленты красные точки — оставшиеся жизни.</p>
+      <p class="small">Если очков больше 45, линейка начинает новый круг, а прошлый остаётся тусклым фоном.</p>
+    </div>
+  </div>
+  <figure>
+    <svg viewBox="0 0 520 44" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Пример линейки: 12 очков и 2 жизни">
+      <rect x="0" y="4" width="520" height="30" rx="8" fill="#1d2330"/>
+      <g id="leds"></g>
+      <script type="text/javascript">/* filled below */</script>
+    </svg>
+    <figcaption>Пример ленты синего игрока: 12 очков (два белых — это 5-е и 10-е) и 2 жизни.</figcaption>
+  </figure>
+
+  <h3>Сложность растёт</h3>
+  <ul>
+    <li>Каждый раунд цепочка удлиняется на 1 цвет, а с 6-го раунда иногда сразу на 2.</li>
+    <li>Показ ускоряется, а время на каждое нажатие сокращается. Темп каждого раунда немного случаен.</li>
+    <li>Цвет в цепочке выбирается случайно, но один и тот же не идёт больше двух раз подряд.</li>
+  </ul>
+  <table>
+    <tr><th>Раунд</th><th>Свечение цвета при показе</th><th>Время на одно нажатие</th></tr>
+    <tr><td>1</td><td>≈ 0,58 с</td><td>4,4 с</td></tr>
+    <tr><td>5</td><td>≈ 0,48 с</td><td>4,0 с</td></tr>
+    <tr><td>10</td><td>≈ 0,35 с</td><td>3,5 с</td></tr>
+    <tr><td>15</td><td>≈ 0,23 с</td><td>3,0 с</td></tr>
+    <tr><td>20 и дальше</td><td>≈ 0,22 с (быстрее не становится)</td><td>2,5 с</td></tr>
+  </table>
+  <p class="muted small">Время свечения в каждом раунде случайно отклоняется до ±15%. Таймер считается на каждое нажатие отдельно и запускается заново после каждого верного нажатия; на первое нажатие раунда добавляется 1 секунда.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>⚡ Спурт <span class="muted small">(с 5-го раунда)</span></h3>
+      Показ идёт заметно быстрее обычного. Объявляется белым стробом на лентах и трелью ведущего. +1 очко.
+    </div>
+    <div class="card">
+      <h3>🔇 Тихий раунд <span class="muted small">(с 9-го раунда)</span></h3>
+      Цепочка показывается без нот, только светом. Объявляется так же. При вводе ноты звучат как обычно. +1 очко.
+    </div>
+  </div>
+
+</section>
+
+<!-- ============ 6. ПОДСВЕТКА ============ -->
+<section class="page">
+  <h2><span class="num">6</span>Что означает подсветка</h2>
+  <h3>Лента игрока</h3>
+  <table class="compact">
+    <tr><th style="width:36%">Что видно</th><th>Что это значит</th></tr>
+    <tr><td>Мигает белым</td><td>Цвет пульта не выбран (раздел 2).</td></tr>
+    <tr><td>Горит цветом, кнопка часто мигает</td><td>Идёт выбор цвета.</td></tr>
+    <tr><td>Бегает тусклая красная точка</td><td>Нет связи с ведущим.</td></tr>
+    <tr><td>Плавно «дышит» своим цветом</td><td>Брейн-ринг: можно жать кнопку.</td></tr>
+    <tr><td>Вспышки с белыми огнями, затем ровный свет</td><td>Брейн-ринг: этот игрок нажал первым.</td></tr>
+    <tr><td>Гаснет от краёв, остаётся тусклой</td><td>Брейн-ринг: первым нажал другой.</td></tr>
+    <tr><td>Ровно горит своим цветом</td><td>Ведущий меняет яркость лент.</td></tr>
+    <tr><td>«Змейка» своим цветом</td><td>«Саймон»: лобби, ждём старта.</td></tr>
+    <tr><td>Тускло светит белым</td><td>«Саймон»: пульт включён после старта и в этой игре не участвует.</td></tr>
+    <tr><td>Линейка очков и красные точки</td><td>«Саймон»: счёт и жизни перед раундом или итог игры.</td></tr>
+    <tr><td>Белый строб</td><td>«Саймон»: особый раунд.</td></tr>
+    <tr><td>Вспыхивает 3 раза раз в секунду</td><td>«Саймон»: отсчёт 3-2-1, сейчас начнётся показ.</td></tr>
+    <tr><td>Заполняется своим цветом</td><td>«Саймон»: прогресс ввода команды.</td></tr>
+    <tr><td>Наливается красным</td><td>«Саймон»: на нажатие осталось меньше 2 секунд.</td></tr>
+    <tr><td>Красный строб</td><td>«Саймон»: ошибся этот игрок.</td></tr>
+    <tr><td>Пульсирует янтарным</td><td>«Саймон»: пауза, кто-то пропал со связи.</td></tr>
+  </table>
+
+  <h3>Индикатор ведущего</h3>
+  <table class="compact">
+    <tr><th style="width:36%">Что видно</th><th>Что это значит</th></tr>
+    <tr><td>Тусклое зелёное «дыхание»</td><td>Брейн-ринг: готов, ждём нажатия.</td></tr>
+    <tr><td>Короткая белая вспышка</td><td>Брейн-ринг: «Сброс», новый раунд.</td></tr>
+    <tr><td>3 вспышки цветом игрока, потом ровно</td><td>Брейн-ринг: этот игрок нажал первым.</td></tr>
+    <tr><td>Разгорается фиолетовым при включении</td><td>Идёт включение «Саймона» (держите кнопку).</td></tr>
+    <tr><td>Фиолетовые вспышки серией</td><td>«Саймон», лобби: число вспышек = игроков на связи.</td></tr>
+    <tr><td>Цвет игрока при показе</td><td>«Саймон»: какой цвет сейчас в цепочке.</td></tr>
+    <tr><td>Зелёный / жёлтый / красный</td><td>«Саймон», счёт и ввод: осталось 3 / 2 / 1 жизни.</td></tr>
+    <tr><td>Цвет жизней медленно пульсирует</td><td>«Саймон»: игра придержана, клик — отсчёт и следующий раунд.</td></tr>
+    <tr><td>Красный · янтарный · радуга</td><td>«Саймон»: ошибка или конец игры · пауза · полная победа.</td></tr>
+  </table>
+</section>
+
+<!-- ============ 7. НЕПОЛАДКИ ============ -->
+<section>
+  <h2><span class="num">7</span>Если что-то не так</h2>
+  <table class="plain">
+    <tr><th style="width:36%">Проблема</th><th>Что сделать</th></tr>
+    <tr><td><b>На ленте бегает красная точка</b></td><td>Пульт не слышит ведущего. Проверьте, включён ли пульт ведущего, и поднесите пульты ближе.</td></tr>
+    <tr><td><b>Два пульта реагируют как один игрок</b></td><td>У них одинаковый цвет. Перенастройте один из них (раздел 2).</td></tr>
+    <tr><td><b>Включился брейн-ринг вместо «Саймона»</b></td><td>Кнопку отпустили раньше 3 секунд. Выключите пульт ведущего и включите снова, удерживая кнопку до мелодии.</td></tr>
+    <tr><td><b>В лобби мало фиолетовых вспышек</b></td><td>Часть пультов не на связи: проверьте, что они включены и на их лентах нет красной точки.</td></tr>
+    <tr><td><b>Игра «Саймон» стоит на янтарной паузе</b></td><td>Включите пропавший пульт или завершите игру удержанием кнопки ведущего 2 с.</td></tr>
+    <tr><td><b>Ленты слишком яркие или тусклые</b></td><td>Удержание кнопки ведущего 2 с между вопросами (раздел 4).</td></tr>
+    <tr><td><b>Пульт сам выключается</b></td><td>Зарядите его через USB-C. Если выключается и при заряженном аккумуляторе — нужна проверка платы.</td></tr>
+  </table>
+</section>
+
+<!-- ============ ШПАРГАЛКА ============ -->
+<section class="page">
+  <h2><span class="num">✦</span>Шпаргалка ведущего</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Брейн-ринг <span class="muted small">(включить без кнопки)</span></h3>
+      <table class="plain">
+        <tr><td><span class="key">клик</span></td><td>Сброс, новый вопрос</td></tr>
+        <tr><td><span class="key">удержание 2 с</span></td><td>Яркость лент −10%, держать — дальше</td></tr>
+      </table>
+      <p class="small">Победитель — первый нажавший после сброса. Индикатор горит его цветом.</p>
+    </div>
+    <div class="card">
+      <h3>«Саймон» <span class="muted small">(включить с кнопкой, держать 3 с)</span></h3>
+      <table class="plain">
+        <tr><td>Лобби</td><td><span class="key">клик</span> старт · <span class="key">2 с</span> яркость</td></tr>
+        <tr><td>Перед раундом</td><td><span class="key">клик</span> придержать / продолжить</td></tr>
+        <tr><td>Ввод</td><td><span class="key">клик</span> показать ещё раз (×3)</td></tr>
+        <tr><td>Игра</td><td><span class="key">2 с</span> закончить</td></tr>
+        <tr><td>Конец</td><td><span class="key">клик</span> в лобби</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:5mm">
+    <div class="card">
+      <h3>Правила «Саймона» коротко</h3>
+      <ul>
+        <li>Запомнить цепочку цветов и повторить по порядку.</li>
+        <li>Каждый жмёт только свою кнопку, когда подходит его цвет.</li>
+        <li>3 жизни на команду. Ошибка — минус жизнь и повтор цепочки.</li>
+        <li>Команда — те, кто был на связи при старте.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Очки</h3>
+      <ul>
+        <li>+1 за пройденный раунд</li>
+        <li>+1 если без ошибок и без повтора</li>
+        <li>+1 за спурт или тихий раунд</li>
+        <li>На ленте: 1 светодиод = 1 очко, каждый 5-й белый</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Цвета игроков</h3>
+  <p>
+    <span class="chip" style="background:var(--red)"></span>1 Красный &nbsp;&nbsp;
+    <span class="chip" style="background:var(--green)"></span>2 Зелёный &nbsp;&nbsp;
+    <span class="chip" style="background:var(--blue)"></span>3 Синий &nbsp;&nbsp;
+    <span class="chip" style="background:var(--yellow)"></span>4 Жёлтый &nbsp;&nbsp;
+    <span class="chip" style="background:var(--white)"></span>5 Белый
+  </p>
+  <p class="small muted">Смена цвета пульта игрока: включить с зажатой кнопкой, держать 2 с → клики выбирают цвет → удержание 2 с сохраняет.</p>
+</section>
+
+<script>
+  // Линейка-пример: 45 LED очков + промежуток + жизни на 52 LED
+  (function () {
+    var g = document.getElementById('leds');
+    var ns = 'http://www.w3.org/2000/svg';
+    var score = 12, lives = 2, n = 52, x0 = 12, step = (520 - 24) / (n - 1);
+    for (var i = 0; i < n; i++) {
+      var c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', x0 + i * step);
+      c.setAttribute('cy', 19);
+      c.setAttribute('r', 3.6);
+      var fill = '#3a4152';
+      if (i < score) fill = (i % 5 === 4) ? '#ffffff' : '#2f6fe0';
+      for (var k = 0; k < lives; k++) if (i === n - 1 - k * 2) fill = '#e23b3b';
+      c.setAttribute('fill', fill);
+      g.appendChild(c);
+    }
+  })();
+</script>
+</body>
+</html>

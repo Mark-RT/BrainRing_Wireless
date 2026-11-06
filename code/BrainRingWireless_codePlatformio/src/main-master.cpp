@@ -40,6 +40,7 @@ uint32_t resetDownMs = 0;        // когда кнопку последний �
 uint32_t resetUs = 0; // момент последнего сброса (micros)
 uint32_t resetMs = 0; // он же в millis (для защиты от переполнения micros)
 bool resetHoldPending = false; // кнопка Сброс ещё держится после срабатывания: ждём удержания
+uint32_t resetHoldNextMs = 0;  // когда сменить яркость, если кнопку всё ещё держат
 
 void isrReset()
 {
@@ -77,6 +78,7 @@ void setLedMode(LedMode mode)
 }
 
 // --- ЯРКОСТЬ ЛЕНТ ИГРОКОВ ---
+const uint16_t BRIGHTNESS_REPEAT_MS = 1000; // кнопку держат дальше -> следующая ступень раз в секунду
 uint8_t stripBrightness = 0;
 
 uint8_t loadStripBrightness()
@@ -88,14 +90,14 @@ uint8_t loadStripBrightness()
     return 0;
 }
 
-// Следующий уровень: запоминаем и сообщаем сигналами (3 = 100%, 2 = 70%, 1 = 50%)
+// Следующий уровень (100% -> 90% ... -> 20% -> 100%): сразу запоминаем, высота сигнала = яркость
 void cycleStripBrightness()
 {
     stripBrightness = (stripBrightness + 1) % BRIGHTNESS_LEVELS;
     EEPROM.update(EE_BRIGHTNESS_ADDR, stripBrightness);
     EEPROM.update(EE_CHECK_ADDR, (uint8_t)~stripBrightness);
     EEPROM.update(EE_MAGIC_ADDR, EE_MAGIC);
-    buzzer.start(SOUND_LEVEL, 5 - 2 * stripBrightness);
+    buzzer.start(&SOUND_LEVELS[stripBrightness], 1);
     Serial.print("Strip brightness level ");
     Serial.println(stripBrightness);
 }
@@ -127,10 +129,10 @@ void handleReset()
         resetHoldPending = false;
     }
 
-    // Удержание Сброса -> следующий уровень яркости лент
-    if (resetHoldPending && digitalRead(PIN_BUTTON) == LOW && millis() - resetMs >= HOLD_MS)
+    // Удержание Сброса -> следующий уровень яркости лент, держим дальше -> ступень каждую секунду
+    if (resetHoldPending && digitalRead(PIN_BUTTON) == LOW && (int32_t)(millis() - resetHoldNextMs) >= 0)
     {
-        resetHoldPending = false;
+        resetHoldNextMs = millis() + BRIGHTNESS_REPEAT_MS;
         cycleStripBrightness();
         loadAckPayload();
     }
@@ -144,6 +146,7 @@ void handleReset()
     interrupts();
     resetMs = millis();
     resetHoldPending = true;
+    resetHoldNextMs = resetMs + HOLD_MS;
 
     gameState.winner = 0;
     gameState.round++;
@@ -275,16 +278,16 @@ const uint8_t SIMON_LIVES = 3;
 const uint8_t SIMON_REPLAYS = 3;          // повторов показа на игру
 const uint16_t SIMON_LOST_MS = 1500;      // участник молчит дольше -> пауза
 const uint16_t SIMON_BACK_MS = 500;       // все ответили за это время -> продолжаем
-const uint16_t SIMON_READY_STEP_MS = 700;
-const uint16_t SIMON_INTRO_MS = 1000;
-const uint16_t SIMON_SHOW_LEAD_MS = 400;  // пауза перед первым шагом показа
-const uint16_t SIMON_OK_MS = 600;
-const uint16_t SIMON_ERROR_MS = 1500;
-const uint16_t SIMON_HURRY_MS = 1000;     // меньше этого на нажатие -> ленты мигают
+const uint16_t SIMON_READY_STEP_MS = 1000; // один счёт отсчёта 3-2-1 перед раундом
+const uint16_t SIMON_INTRO_MS = 2000;      // показ счёта и жизней
+const uint16_t SIMON_SHOW_LEAD_MS = 400;   // пауза перед первым шагом повторного показа
+const uint16_t SIMON_OK_MS = SIMON_OK_ANIM_MS + SIMON_BREAK_MS;
+const uint16_t SIMON_ERROR_MS = SIMON_ERROR_ANIM_MS + SIMON_BREAK_MS;
+const uint16_t SIMON_FIRST_PRESS_BONUS_MS = 1000; // на первое нажатие: сообразить, чей цвет первый
 const uint32_t SIMON_DUP_PRESS_US = 80000; // ближе по времени = повтор доставки того же нажатия
 
 bool simonMode = false;
-SimonState simon = {SIMON_LOBBY, 0, 0, 0, SIMON_LIVES, 0, 0, 0};
+SimonState simon = {SIMON_LOBBY, 0, 0, 0, SIMON_LIVES, 0, 0, 0, 0};
 PolledButton simonButton(PIN_BUTTON);
 
 uint32_t lastSeenMs[MAX_PLAYERS + 1];
@@ -307,7 +310,11 @@ uint32_t phaseSince = 0;
 uint32_t stepSince = 0;
 uint8_t showIdx = 0;
 bool showLit = false;
+uint16_t showLeadMs = 0;
 uint8_t readyLeft = 0;
+bool simonHeld = false;           // Админ придержал игру перед раундом
+bool lobbyHolding = false;        // в лобби держат кнопку: листаем яркость
+uint32_t lobbyHoldNextMs = 0;
 
 uint8_t inputIdx = 0;
 uint32_t inputStartUs = 0;
@@ -380,7 +387,7 @@ void simonNextRound()
 
     onMs = on;
     gapMs = max(100, on / 3);
-    inputTimeoutMs = max(1500, 3500 - 100 * (int16_t)level);
+    inputTimeoutMs = max(2500, 4500 - 100 * (int16_t)level);
     cleanRound = true;
 
     Serial.print("Round ");
@@ -395,15 +402,42 @@ void simonNextRound()
 
 void simonStartIntro()
 {
+    simonHeld = false;
+    simon.flags &= ~SIMON_FLAG_HOLD;
     if (simon.flags & (SIMON_FLAG_BURST | SIMON_FLAG_SILENT))
         buzzer.start(MELODY(SIMON_TWIST));
     simonSetPhase(SIMON_INTRO);
 }
 
-void simonStartShow()
+// Отсчёт 3-2-1 перед показом: последний сигнал выше и длиннее
+void simonStartCountdown()
+{
+    simonHeld = false;
+    simon.flags &= ~SIMON_FLAG_HOLD;
+    readyLeft = 3;
+    simon.progress = readyLeft;
+    buzzer.start(MELODY(SIMON_BEEP));
+    simonSetPhase(SIMON_READY);
+}
+
+// Придержать игру перед раундом: ленты показывают счёт, пока Админ снова не кликнет
+void simonHold()
+{
+    simonHeld = true;
+    simon.flags |= SIMON_FLAG_HOLD;
+    buzzer.start(MELODY(ADMIN_RESET_SOUND));
+    if (simon.phase == SIMON_INTRO)
+        loadSimonPayload();
+    else
+        simonSetPhase(SIMON_INTRO);
+    Serial.println("Hold");
+}
+
+void simonStartShow(uint16_t leadMs)
 {
     showIdx = 0;
     showLit = false;
+    showLeadMs = leadMs;
     simon.flags &= ~SIMON_FLAG_HURRY;
     simonSetPhase(SIMON_SHOW);
 }
@@ -437,10 +471,15 @@ void simonGameOver(bool win)
 void simonStartGame()
 {
     randomSeed(micros()); // момент клика случаен: разные игры после каждого включения
+    // Состав фиксируется на всю игру: кто на связи в момент старта
     rosterCount = 0;
+    simon.roster = 0;
     for (uint8_t id = 1; id <= MAX_PLAYERS; id++)
         if (simonOnline(id, SIMON_LOST_MS))
+        {
             roster[rosterCount++] = id;
+            simon.roster |= 1 << id;
+        }
 
     if (rosterCount == 0)
     {
@@ -454,10 +493,9 @@ void simonStartGame()
     simon.score = 0;
     simon.lives = SIMON_LIVES;
     simon.flags = 0;
-    readyLeft = 3;
-    simon.progress = readyLeft;
     buzzer.start(MELODY(SIMON_BEEP));
-    simonSetPhase(SIMON_READY);
+    simonNextRound();
+    simonStartIntro();
 
     Serial.print("Simon start, players: ");
     Serial.println(rosterCount);
@@ -531,10 +569,7 @@ void simonHandleRadio()
 
 bool simonInRoster(uint8_t id)
 {
-    for (uint8_t i = 0; i < rosterCount; i++)
-        if (roster[i] == id)
-            return true;
-    return false;
+    return simon.roster & (1 << id);
 }
 
 // Судим самое раннее нажатие, когда окно на его опоздавших соседей закрылось.
@@ -578,12 +613,13 @@ void simonUpdateInput()
         return;
 
     uint32_t elapsed = millis() - stepSince;
-    if (elapsed >= inputTimeoutMs)
+    uint16_t limit = inputTimeoutMs + (inputIdx == 0 ? SIMON_FIRST_PRESS_BONUS_MS : 0);
+    if (elapsed >= limit)
     {
         simonMistake(seq[inputIdx]);
         return;
     }
-    bool hurry = inputTimeoutMs - elapsed < SIMON_HURRY_MS;
+    bool hurry = limit - elapsed < SIMON_HURRY_MS;
     if (hurry != (bool)(simon.flags & SIMON_FLAG_HURRY))
     {
         simon.flags ^= SIMON_FLAG_HURRY;
@@ -604,7 +640,7 @@ void simonUpdateShow()
     }
     else
     {
-        if (elapsed < (showIdx == 0 ? SIMON_SHOW_LEAD_MS : gapMs))
+        if (elapsed < (showIdx == 0 ? showLeadMs : gapMs))
             return;
         if (showIdx >= seqLen)
         {
@@ -634,19 +670,19 @@ void simonUpdatePhase()
         if (--readyLeft > 0)
         {
             simon.progress = readyLeft;
-            buzzer.start(MELODY(SIMON_BEEP));
+            if (readyLeft == 1)
+                buzzer.start(MELODY(SIMON_GO));
+            else
+                buzzer.start(MELODY(SIMON_BEEP));
             simonSetPhase(SIMON_READY);
         }
         else
-        {
-            simonNextRound();
-            simonStartIntro();
-        }
+            simonStartShow(0); // сразу первый цвет
         break;
 
     case SIMON_INTRO:
-        if (t >= SIMON_INTRO_MS)
-            simonStartShow();
+        if (!simonHeld && t >= SIMON_INTRO_MS)
+            simonStartCountdown();
         break;
 
     case SIMON_SHOW:
@@ -722,6 +758,20 @@ void simonCheckLink()
 void simonHandleButton()
 {
     ButtonEvent ev = simonButton.poll();
+
+    // Кнопку держат дальше после смены яркости -> следующая ступень каждую секунду
+    if (lobbyHolding)
+    {
+        if (digitalRead(PIN_BUTTON) == HIGH || simon.phase != SIMON_LOBBY)
+            lobbyHolding = false;
+        else if ((int32_t)(millis() - lobbyHoldNextMs) >= 0)
+        {
+            lobbyHoldNextMs = millis() + BRIGHTNESS_REPEAT_MS;
+            cycleStripBrightness();
+            loadSimonPayload();
+        }
+    }
+
     if (ev == BTN_NONE)
         return;
 
@@ -731,6 +781,8 @@ void simonHandleButton()
         {
             cycleStripBrightness();
             loadSimonPayload();
+            lobbyHolding = true;
+            lobbyHoldNextMs = millis() + BRIGHTNESS_REPEAT_MS;
         }
         else if (simon.phase != SIMON_OVER)
             simonGameOver(false);
@@ -743,6 +795,17 @@ void simonHandleButton()
         simonStartGame();
         break;
 
+    case SIMON_INTRO: // перед раундом: придержать игру / продолжить с отсчёта
+        if (simonHeld)
+            simonStartCountdown();
+        else
+            simonHold();
+        break;
+
+    case SIMON_READY:
+        simonHold();
+        break;
+
     case SIMON_INPUT: // показать последовательность ещё раз
         if (replaysLeft == 0)
         {
@@ -752,7 +815,7 @@ void simonHandleButton()
         replaysLeft--;
         cleanRound = false;
         buzzer.start(MELODY(SIMON_REPLAY));
-        simonStartShow();
+        simonStartShow(SIMON_SHOW_LEAD_MS);
         Serial.print("Replay, left ");
         Serial.println(replaysLeft);
         break;
@@ -761,6 +824,7 @@ void simonHandleButton()
         simon.score = 0;
         simon.lives = SIMON_LIVES;
         simon.flags = 0;
+        simon.roster = 0;
         buzzer.start(MELODY(ADMIN_RESET_SOUND));
         simonSetPhase(SIMON_LOBBY);
         break;
@@ -798,8 +862,12 @@ void simonUpdateLed()
         break;
     }
 
-    case SIMON_READY:
-        strip.fill(t < 200 ? scaleColor(mWhite, 255) : scaleColor(mWhite, 0));
+    case SIMON_READY: // вспышка на каждый счёт, последняя длиннее
+        strip.fill(t < (simon.progress == 1 ? 400u : 200u) ? scaleColor(mWhite, 255) : scaleColor(mWhite, 0));
+        break;
+
+    case SIMON_INTRO: // жизни; придержано -> медленно пульсирует
+        strip.fill(scaleColor(simonLivesColor(), simonHeld ? 20 + triangleWave(t, 2000) * 235 / 255 : 100));
         break;
 
     case SIMON_SHOW:
@@ -807,11 +875,11 @@ void simonUpdateLed()
         break;
 
     case SIMON_OK:
-        strip.fill(mGreen);
+        strip.fill(t < SIMON_OK_ANIM_MS ? mData(mGreen) : scaleColor(mGreen, 0));
         break;
 
     case SIMON_ERROR:
-        strip.fill(mRed);
+        strip.fill(t < SIMON_ERROR_ANIM_MS ? mData(mRed) : scaleColor(mRed, 0));
         break;
 
     case SIMON_PAUSE:
@@ -822,7 +890,7 @@ void simonUpdateLed()
         strip.fill((simon.flags & SIMON_FLAG_WIN) ? mWheel(t % 1530) : mData(mRed));
         break;
 
-    default: // INTRO, INPUT: цвет показывает оставшиеся жизни
+    default: // INPUT: цвет показывает оставшиеся жизни
         strip.fill(scaleColor(simonLivesColor(), 100));
         break;
     }

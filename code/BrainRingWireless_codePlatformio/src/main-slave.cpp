@@ -38,8 +38,9 @@ const uint16_t FRAME_MS = 20;            // 50 кадров/с
 const uint16_t WIN_ANIM_MS = 3500;       // длительность анимации победителя
 const uint8_t BTN_LED_MIN = 26;          // 10% ШИМ: нижняя граница яркости кнопки, она и так тусклая
 const uint16_t BRIGHTNESS_PREVIEW_MS = 1000; // столько лента горит ровно после смены яркости
-// Значения setBrightness (идёт через гамму microLED): реальный ШИМ 33, 23 и 17 = 100%, 70% и 50%
-const uint8_t STRIP_BRIGHTNESS[BRIGHTNESS_LEVELS] = {100, 82, 68};
+// Значения setBrightness (идёт через гамму microLED): реальный ШИМ 33, 30, 26, 23, 20, 17, 13, 10, 7
+// = 100%, 90% ... 20% от исходной яркости
+const uint8_t STRIP_BRIGHTNESS[BRIGHTNESS_LEVELS] = {100, 95, 88, 82, 75, 68, 59, 49, 40};
 const uint16_t SIMON_PING_INTERVAL = 25; // опрос Админа в Саймоне: подсветка следует за его командами
 const uint16_t SIMON_PRESS_FLASH_MS = 150; // вспышка и нота на своём пульте при нажатии
 const uint16_t SIMON_NOTE_MAX_MS = 1500;   // нота показа не тянется дольше, даже если связь пропала
@@ -101,10 +102,11 @@ void isrButton()
 PolledButton menuButton(PIN_BUTTON);
 
 // --- САЙМОН ---
-SimonState simon = {0xFF, 0, 0, 0, 0, 0, 0}; // последнее состояние от Админа
+SimonState simon = {0xFF, 0, 0, 0, 0, 0, 0, 0, 0}; // последнее состояние от Админа
 uint32_t simonPhaseSince = 0;
 uint32_t simonStepSince = 0;
 uint32_t pressFlashUntil = 0;
+uint32_t hurrySince = 0; // когда началась нарастающая угроза (последние секунды на нажатие)
 bool noteOn = false;
 uint32_t noteUntil = 0;
 
@@ -201,6 +203,12 @@ void applyAdminState(const AdminState &s)
   }
 }
 
+// Этот пульт участвует в текущей игре? (включённые после старта только смотрят)
+bool simonPlaying()
+{
+  return simon.roster & (1 << playerId);
+}
+
 // --- САЙМОН: звук своего цвета ---
 void simonNote(uint16_t durationMs)
 {
@@ -229,6 +237,8 @@ void applySimonState(const SimonState &s)
   applyBrightness(s.brightness);
   bool newPhase = s.phase != simon.phase;
   bool newStep = s.stepId != simon.stepId;
+  if ((s.flags & SIMON_FLAG_HURRY) && !(simon.flags & SIMON_FLAG_HURRY))
+    hurrySince = millis();
   simon = s;
 
   if (currentState != STATE_SIMON)
@@ -293,7 +303,7 @@ void handlePress()
 
   if (currentState == STATE_SIMON)
   {
-    if (simon.phase != SIMON_INPUT) // нажатия вне ввода не считаются
+    if (simon.phase != SIMON_INPUT || !simonPlaying()) // нажатия вне ввода и не участника не считаются
     {
       pressPending = false;
       return;
@@ -428,6 +438,13 @@ uint8_t renderSimon()
   uint8_t btn = 0;
   strip.clear();
 
+  // Включился после старта: в игре не участвует, тускло светит белым до конца игры
+  if (simon.phase != SIMON_LOBBY && simon.phase != SIMON_OVER && !simonPlaying())
+  {
+    strip.fill(scaleColor(mWhite, 40));
+    return 0;
+  }
+
   switch (simon.phase)
   {
   case SIMON_LOBBY: // змейка своим цветом: "ты в игре, ждём старта"
@@ -439,8 +456,8 @@ uint8_t renderSimon()
     break;
   }
 
-  case SIMON_READY: // вспышка на каждый счёт отсчёта
-    if (millis() - simonStepSince < 250)
+  case SIMON_READY: // вспышка на каждый счёт отсчёта, последняя длиннее
+    if (millis() - simonStepSince < (simon.progress == 1 ? 500u : 250u))
     {
       strip.fill(myColor);
       btn = 255;
@@ -448,7 +465,7 @@ uint8_t renderSimon()
     break;
 
   case SIMON_INTRO: // особый раунд объявляем стробом, затем счёт и жизни
-    if ((simon.flags & (SIMON_FLAG_BURST | SIMON_FLAG_SILENT)) && t < 400)
+    if ((simon.flags & (SIMON_FLAG_BURST | SIMON_FLAG_SILENT)) && !(simon.flags & SIMON_FLAG_HOLD) && t < 400)
     {
       if ((t / 60) % 2)
         strip.fill(mWhite);
@@ -477,7 +494,15 @@ uint8_t renderSimon()
       strip.fill(myColor);
       btn = 255;
     }
-    else if (!(simon.flags & SIMON_FLAG_HURRY) || (t / 125) % 2) // времени мало -> мигаем
+    else if (simon.flags & SIMON_FLAG_HURRY) // время на исходе: лента наливается красным 20% -> 60%
+    {
+      uint32_t h = millis() - hurrySince;
+      if (h > SIMON_HURRY_MS)
+        h = SIMON_HURRY_MS;
+      strip.fill(scaleColor(mRed, 51 + h * (153 - 51) / SIMON_HURRY_MS));
+      btn = 80;
+    }
+    else
     {
       uint8_t filled = (uint16_t)simon.progress * NUM_LEDS / 255;
       strip.fill(scaleColor(myColor, 8));
@@ -487,8 +512,10 @@ uint8_t renderSimon()
     }
     break;
 
-  case SIMON_OK: // бегущий огонь своим цветом
+  case SIMON_OK: // бегущий огонь своим цветом, затем пауза в темноте
   {
+    if (t >= SIMON_OK_ANIM_MS)
+      break;
     strip.fill(scaleColor(myColor, 40));
     uint8_t pos = (t / 12) % NUM_LEDS;
     for (uint8_t i = 0; i < 6; i++)
@@ -498,7 +525,7 @@ uint8_t renderSimon()
   }
 
   case SIMON_ERROR: // виновник стробит красным, остальные тёмные
-    if (simon.active == playerId && (t / 80) % 2 == 0)
+    if (simon.active == playerId && t < SIMON_ERROR_ANIM_MS && (t / 80) % 2 == 0)
     {
       strip.fill(mRed);
       btn = 255;

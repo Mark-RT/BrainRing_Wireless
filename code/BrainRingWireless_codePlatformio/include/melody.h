@@ -43,12 +43,15 @@ const Note SOUND_CLICK[] PROGMEM = {{1200, 15}};
 const Note SOUND_CONFIRM[] PROGMEM = {{N_C5, 70}, {N_E5, 70}, {N_G5, 70}, {N_C6, 150}};
 const Note ADMIN_PRESS_SOUND[] PROGMEM = {{1500, 80}, {0, 60}, {1500, 80}, {0, 60}, {2000, 150}};
 const Note ADMIN_RESET_SOUND[] PROGMEM = {{2000, 25}};
-const Note SOUND_LEVEL[] PROGMEM = {{1500, 80}, {0, 80}, {1500, 80}, {0, 80}, {1500, 80}}; // до 3 сигналов: уровень яркости
+// Уровень яркости: чем ярче, тем выше сигнал (индекс = уровень 0..8)
+const Note SOUND_LEVELS[] PROGMEM = {{2000, 90}, {1800, 90}, {1600, 90}, {1400, 90}, {1250, 90},
+                                     {1100, 90}, {950, 90}, {800, 90}, {700, 90}};
 
 // --- САЙМОН ---
 // Нота каждого цвета (ID 1..5): пентатоника, любая цепочка звучит созвучно
 const uint16_t SIMON_TONES[5] = {N_C5, N_D5, N_E5, N_G5, N_A5};
 const Note SIMON_BEEP[] PROGMEM = {{1500, 120}};
+const Note SIMON_GO[] PROGMEM = {{2200, 400}}; // последний счёт отсчёта: выше и длиннее
 const Note SIMON_REPLAY[] PROGMEM = {{N_G5, 60}, {0, 30}, {N_G5, 60}};
 const Note SIMON_DENY[] PROGMEM = {{200, 250}};
 const Note SIMON_ROUND_OK[] PROGMEM = {{N_E5, 70}, {N_G5, 70}, {N_C6, 120}};
