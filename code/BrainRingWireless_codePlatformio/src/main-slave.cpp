@@ -35,7 +35,8 @@ const uint16_t PRESS_GIVEUP_MS = 1500;   // столько пытаемся до
 const uint16_t LINK_TIMEOUT_MS = 1000;   // нет ответа дольше -> "нет связи"
 const uint32_t RELEASE_STABLE_US = 20000; // кнопка должна быть отпущена столько перед нажатием
 const uint16_t FRAME_MS = 20;            // 50 кадров/с
-const uint16_t WIN_ANIM_MS = 3500;       // длительность анимации победителя
+const uint16_t RESULT_MS = 2000;         // вся индикация выигрыша/проигрыша (анимация и музыка) не дольше
+const uint8_t LOST_RED_LEVEL = 80;       // яркость красной ленты проигравшего (как точка "нет связи": видна на любой яркости)
 const uint8_t BTN_LED_MIN = 26;          // 10% ШИМ: нижняя граница яркости кнопки, она и так тусклая
 const uint16_t BRIGHTNESS_PREVIEW_MS = 1000; // столько лента горит ровно после смены яркости
 // Значения setBrightness (идёт через гамму microLED): реальный ШИМ 33, 30, 26, 23, 20, 17, 13, 10, 7
@@ -82,20 +83,55 @@ uint32_t lastFrame = 0;
 volatile bool pressPending = false;
 volatile uint32_t pressMicros = 0;
 volatile uint32_t lastReleaseUs = 0;
+// Защёлка: после засчитанного нажатия новые не принимаются, пока кнопка не будет стабильно отпущена.
+// Короткий импульс дребезга прерывание может прочитать уже как LOW и не заметить отпускание,
+// поэтому снимает защёлку только опрос в loop() (releaseButtonLatch)
+volatile bool pressLatched = false;
+volatile uint8_t buttonEdges = 0; // счётчик фронтов: опрос узнаёт о дребезге между своими проверками
+uint32_t releaseSinceUs = 0;
+uint8_t releaseEdges = 0;
+bool releaseSeen = false;
 
 void isrButton()
 {
   uint32_t now = micros();
+  buttonEdges++;
   if (digitalRead(PIN_BUTTON) == HIGH) // отпускание
   {
     lastReleaseUs = now;
     return;
   }
   // Нажатие засчитываем, только если до этого кнопка была стабильно отпущена (антидребезг)
-  if (!gameActive || pressPending || now - lastReleaseUs < RELEASE_STABLE_US)
+  if (!gameActive || pressPending || pressLatched || now - lastReleaseUs < RELEASE_STABLE_US)
     return;
   pressMicros = now;
   pressPending = true;
+  pressLatched = true;
+}
+
+// Снимаем защёлку, когда кнопка непрерывно отпущена дольше RELEASE_STABLE_US
+void releaseButtonLatch()
+{
+  if (!pressLatched)
+    return;
+  if (digitalRead(PIN_BUTTON) == LOW)
+  {
+    releaseSeen = false;
+    return;
+  }
+  uint32_t now = micros();
+  uint8_t edges = buttonEdges;
+  if (!releaseSeen || edges != releaseEdges) // впервые видим отпущенной или был дребезг -> отсчёт заново
+  {
+    releaseSeen = true;
+    releaseSinceUs = now;
+    releaseEdges = edges;
+  }
+  else if (now - releaseSinceUs >= RELEASE_STABLE_US)
+  {
+    pressLatched = false;
+    releaseSeen = false;
+  }
 }
 
 // --- КНОПКА В МЕНЮ (опрос) ---
@@ -198,7 +234,7 @@ void applyAdminState(const AdminState &s)
   {
     enterState(target, newRound); // мелодия - один раз за раунд
     if (!newRound)
-      stateSince = millis() - WIN_ANIM_MS; // связь вернулась в том же раунде: без повтора вспышек, сразу ровное свечение
+      stateSince = millis() - RESULT_MS; // связь вернулась в том же раунде: без повтора вспышек, сразу ровное свечение
     resultRound = s.round;
   }
 }
@@ -599,7 +635,7 @@ void renderStrip()
   }
 
   case STATE_WON:
-    if (t < WIN_ANIM_MS) // вспышки + белый бегущий огонь, кнопка стробит в такт вспышкам
+    if (t < RESULT_MS) // вспышки + белый бегущий огонь, кнопка стробит в такт вспышкам
     {
       bool flash = (t / 100) % 2;
       strip.fill(flash ? myColor : scaleColor(myColor, 60));
@@ -615,9 +651,10 @@ void renderStrip()
     }
     break;
 
-  case STATE_LOST: // гаснем от краёв к центру и остаёмся тусклыми
+  case STATE_LOST: // от краёв к центру лента становится тускло-красной и так остаётся
   {
-    mData dim = scaleColor(myColor, 25);
+    // Раньше тут был свой цвет на 10%: зелёный на такой яркости не светился вовсе, синий еле-еле
+    mData dim = scaleColor(mRed, LOST_RED_LEVEL);
     strip.fill(myColor);
     uint8_t edge = (t >= 600) ? NUM_LEDS / 2 : t * (NUM_LEDS / 2) / 600;
     for (uint8_t i = 0; i < edge; i++)
@@ -625,13 +662,8 @@ void renderStrip()
       strip.set(i, dim);
       strip.set(NUM_LEDS - 1 - i, dim);
     }
-    // Кнопка: гаснет за 0.6 с, тёмная до 2 с, затем мягко пульсирует 10%..50%
-    if (t < 600)
-      btn = 255 - t * 255 / 600;
-    else if (t < 2000)
-      btn = 0;
-    else
-      btn = 26 + (uint16_t)triangleWave(t - 2000, 2000) * (128 - 26) / 255;
+    // Кнопка гаснет за 0.6 с и дальше не мигает
+    btn = (t < 600) ? 255 - t * 255 / 600 : 0;
     break;
   }
 
@@ -639,6 +671,9 @@ void renderStrip()
     btn = renderSimon();
     break;
   }
+  // Индикация результата не дольше RESULT_MS: обрываем мелодию, если она вдруг длиннее
+  if ((currentState == STATE_WON || currentState == STATE_LOST) && t >= RESULT_MS && buzzer.isPlaying())
+    buzzer.stop();
   if ((int32_t)(brightnessPreviewUntil - millis()) > 0) // лента ровно горит: видно новую яркость
     strip.fill(myColor);
   strip.show();
@@ -649,7 +684,7 @@ void renderStrip()
 // IP5305 выключает выход 5V, если ток долго меньше ~45 мА.
 // Раз в 15 с включаем нагрузку ~100 мА на 300 мс (в среднем ~2 мА).
 const unsigned long KEEPALIVE_PERIOD = 15000;
-const unsigned long KEEPALIVE_PULSE = 300;
+const unsigned long KEEPALIVE_PULSE = 600;
 
 unsigned long keepAliveTimer = 0;
 bool keepAliveOn = false;
@@ -720,6 +755,7 @@ void loop()
 {
   if (gameActive)
   {
+    releaseButtonLatch();
     handlePress(); // 1. ПРИОРИТЕТ: игрок ударил по кнопке
     handlePing();  // 2. ФОНОВЫЙ ОПРОС: синхронизация статуса
   }

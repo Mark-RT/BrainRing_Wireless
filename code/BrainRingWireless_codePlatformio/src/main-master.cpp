@@ -944,7 +944,7 @@ bool simonBootHold()
 // IP5305 выключает выход 5V, если ток долго меньше ~45 мА.
 // Раз в 15 с включаем нагрузку ~100 мА на 300 мс (в среднем ~2 мА).
 const unsigned long KEEPALIVE_PERIOD = 15000;
-const unsigned long KEEPALIVE_PULSE = 300;
+const unsigned long KEEPALIVE_PULSE = 600;
 
 unsigned long keepAliveTimer = 0;
 bool keepAliveOn = false;

@@ -159,11 +159,22 @@ private:
 // Общая настройка NRF24L01 для обеих сторон
 inline void radioSetupCommon(RF24 &radio)
 {
-    radio.begin();
-    radio.setChannel(RADIO_CHANNEL);
-    radio.setDataRate(RF24_1MBPS);
-    radio.setPALevel(RF24_PA_HIGH); // PA_HIGH = средняя мощность (в RF24 нет PA_MED); на PA_MAX рядом стоящие платы почти не слышат друг друга (<1% пакетов)
-    radio.enableAckPayload();
+    // После подачи питания NRF24 до ~100 мс не принимает настройки (power-on reset), а МК стартует сразу:
+    // при холодном включении настройки терялись, после кнопки Reset (модуль уже запитан) всё работало
+    while (millis() < 200)
+        ;
+    for (uint8_t attempt = 0; attempt < 5; attempt++)
+    {
+        radio.begin();
+        radio.setChannel(RADIO_CHANNEL);
+        radio.setDataRate(RF24_1MBPS);
+        radio.setPALevel(RF24_PA_LOW); // PA_HIGH = средняя мощность (в RF24 нет PA_MED); на PA_MAX рядом стоящие платы почти не слышат друг друга (<1% пакетов)
+        radio.enableAckPayload();
+        // Проверяем, что настройки реально записались в модуль, иначе повторяем
+        if (radio.isChipConnected() && radio.getChannel() == RADIO_CHANNEL && radio.getDataRate() == RF24_1MBPS)
+            break;
+        delay(100);
+    }
 }
 
 // Треугольная волна 0..255 с периодом periodMs (для "дыхания")
